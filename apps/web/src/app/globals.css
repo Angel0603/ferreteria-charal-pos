@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --color-base:         #FAFAF8;
+  --color-surface:      #FFFFFF;
+  --color-surface-2:    #F4F2EE;
+  --color-hover:        #F0EEE9;
+
+  --color-text-primary:    #1C1B19;
+  --color-text-secondary:  #6B6964;
+  --color-text-tertiary:   #9C9A94;
+
+  --color-border:        #E8E6E1;
+  --color-border-strong: #D8D5CE;
+
+  --color-accent:        #B45309;
+  --color-accent-hover:  #9A4507;
+  --color-accent-soft:   #FCEFE1;
+  --color-accent-soft-text: #92400E;
+
+  --color-success:       #15803D;
+  --color-success-soft:  #EAF5EE;
+  --color-success-soft-text: #166534;
+
+  --color-danger:        #B91C1C;
+  --color-danger-soft:   #FBEAEA;
+  --color-danger-soft-text: #991B1B;
+
+  --color-info:          #1D4ED8;
+  --color-info-soft:     #EAF0FD;
+  --color-info-soft-text: #1E40AF;
+
+  --color-warning:       #B45309;
+  --color-warning-soft:  #FCEFE1;
+  --color-warning-soft-text: #92400E;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+.dark {
+  --color-base:        #110F0E;
+  --color-surface:      #1A1815;
+  --color-surface-2:    #211F1B;
+  --color-hover:        #2A2722;
+
+  --color-text-primary:    #EDEAE3;
+  --color-text-secondary:  #938F87;
+  --color-text-tertiary:   #605C56;
+
+  --color-border:        #322F2A;
+  --color-border-strong: #423E37;
+
+  --color-accent:        #D97D3D;
+  --color-accent-hover:  #E8A767;
+  --color-accent-soft:   #332217;
+  --color-accent-soft-text: #E8A767;
+
+  --color-success:       #4ADE80;
+  --color-success-soft:  #1B2E1F;
+  --color-success-soft-text: #7FCB94;
+
+  --color-danger:        #F87171;
+  --color-danger-soft:   #321A1A;
+  --color-danger-soft-text: #E68A8A;
+
+  --color-info:          #60A5FA;
+  --color-info-soft:     #19233D;
+  --color-info-soft-text: #8FB8F5;
+
+  --color-warning:       #D97D3D;
+  --color-warning-soft:  #332217;
+  --color-warning-soft-text: #E8A767;
+}
+
+/* Scrollbar personalizado */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-tertiary);
+}
+
+body {
+  background: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}

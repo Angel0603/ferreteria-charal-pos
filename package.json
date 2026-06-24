@@ -1,0 +1,13 @@
+{
+  "name": "ferreteria-pos",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "build:web": "pnpm --filter web build",
+    "gen:types": "supabase gen types typescript --project-id wdumdpsvguwvkuswztxs --schema public > packages/types/database.types.ts"  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
