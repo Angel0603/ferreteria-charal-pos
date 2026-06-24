@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { DashboardSkeleton } from "@/components/ui/skeletons/DashboardSkeleton";
 import Link from "next/link";
+import { ClimaWidget } from "@/components/ui/ClimaWidget";
 
 type KPIs = {
   ventas_hoy: number;
@@ -147,17 +148,42 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Dashboard</h1>
-        <p className="text-md text-text-secondary mt-0.5">
-          {sucursalNombre} —{" "}
-          {new Date().toLocaleDateString("es-MX", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
+      <div className="flex items-center gap-6 bg-surface border border-border rounded-xl px-6 py-4">
+        {/* Fecha */}
+        <div className="flex items-baseline gap-3 shrink-0">
+          <span className="text-5xl font-semibold text-text-primary leading-none">
+            {new Date().getDate()}
+          </span>
+          <div>
+            <p className="text-sm font-medium text-text-primary capitalize">
+              {new Date().toLocaleDateString("es-MX", { month: "long" })}
+            </p>
+            <p className="text-xs text-text-tertiary capitalize">
+              {new Date().getFullYear()} ·{" "}
+              {new Date().toLocaleDateString("es-MX", { weekday: "long" })}
+            </p>
+          </div>
+        </div>
+
+        {/* Separador */}
+        <div className="w-px h-10 bg-border shrink-0" />
+
+        {/* Título + sucursal */}
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">Dashboard</h1>
+          <span
+            className="inline-flex items-center gap-1.5 text-xs font-medium
+                     bg-accent-soft text-accent-soft-text px-2.5 py-1 rounded-full mt-1"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+            {sucursalNombre}
+          </span>
+        </div>
+
+        {/* Clima */}
+        <div className="shrink-0 justify-self-end ml-auto">
+          <ClimaWidget />
+        </div>
       </div>
 
       {/* KPIs principales */}

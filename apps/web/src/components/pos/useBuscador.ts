@@ -22,7 +22,7 @@ export function useBuscador(sucursalId: string) {
       const supabase = supabaseRef.current
 
       try {
-        // Sin búsqueda ni categoría: mostrar los 10 más vendidos de la semana
+        // Sin búsqueda NI categoría: mostrar los 10 más vendidos de la semana
         if (!query && !categoriaId) {
           const { data } = await supabase
             .rpc('get_productos_top_semana', { p_sucursal_id: sucursalId })
@@ -30,12 +30,11 @@ export function useBuscador(sucursalId: string) {
           return
         }
 
-        // Con búsqueda o categoría: buscar en todo el catálogo
+        // Con búsqueda O categoría: buscar en catálogo completo
         let q = supabase
           .from('productos')
-          .select('*, inventario!inner(cantidad, sucursal_id)')
+          .select('*')
           .eq('activo', true)
-          .eq('inventario.sucursal_id', sucursalId)
           .order('nombre')
           .limit(40)
 
