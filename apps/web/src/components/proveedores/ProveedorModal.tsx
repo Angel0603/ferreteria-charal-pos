@@ -116,7 +116,7 @@ export function ProveedorModal({ proveedor, onClose, onGuardado }: Props) {
       <div className="bg-surface border border-border rounded-2xl w-full max-w-md">
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-base font-medium text-text-primary">
+          <h2 className="font-medium text-text-primary">
             {esEdicion ? 'Editar proveedor' : 'Nuevo proveedor'}
           </h2>
           <button onClick={onClose} className="text-text-tertiary hover:text-text-primary transition-colors">
