@@ -1,199 +1,209 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import { X, Eye, EyeOff, ChevronDown, Check } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
-import { toast } from 'sonner'
-import type { Database } from '@repo/types'
+import { useEffect, useRef, useState } from "react";
+import { X, Eye, EyeOff, ChevronDown, Check } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import type { Database } from "@repo/types";
+import { crearUsuario } from "@/app/(dashboard)/usuarios/actions";
 
-type Perfil    = Database['public']['Tables']['perfiles']['Row']
-type Sucursal  = Database['public']['Tables']['sucursales']['Row']
+type Perfil = Database["public"]["Tables"]["perfiles"]["Row"];
+type Sucursal = Database["public"]["Tables"]["sucursales"]["Row"];
 
 type Props = {
-  perfil:     Perfil | null
-  onClose:    () => void
-  onGuardado: (perfil: Perfil) => void
-}
+  perfil: Perfil | null;
+  onClose: () => void;
+  onGuardado: (perfil: Perfil) => void;
+};
 
 const ROLES = [
-  { value: 'admin',   label: 'Administrador', desc: 'Acceso completo al sistema' },
-  { value: 'cajero',  label: 'Cajero',         desc: 'Solo puede usar el POS'     },
-  { value: 'almacen', label: 'Almacén',        desc: 'Gestión de inventario'      },
-]
+  {
+    value: "admin",
+    label: "Administrador",
+    desc: "Acceso completo al sistema",
+  },
+  { value: "cajero", label: "Cajero", desc: "Solo puede usar el POS" },
+  { value: "almacen", label: "Almacén", desc: "Gestión de inventario" },
+];
 
-const MAX_NOMBRE     = 60
-const MIN_PASSWORD   = 8
+const MAX_NOMBRE = 60;
+const MIN_PASSWORD = 8;
 
 export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
-  const supabase  = createClient()
-  const esEdicion = !!perfil
+  const supabase = createClient();
+  const esEdicion = !!perfil;
 
-  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [form, setForm] = useState({
-    nombre:      perfil?.nombre      ?? '',
-    rol:         perfil?.rol         ?? 'cajero',
-    sucursal_id: perfil?.sucursal_id ?? '',
-    email:       '',
-    password:    '',
-  })
-  const [mostrarPassword, setMostrarPassword] = useState(false)
-  const [loading,         setLoading]         = useState(false)
-  const [dropdownSucursalAbierto, setDropdownSucursalAbierto] = useState(false)
-  const supabaseRef = useRef(createClient())
-  const dropdownSucursalRef = useRef<HTMLDivElement>(null)
+    nombre: perfil?.nombre ?? "",
+    rol: perfil?.rol ?? "cajero",
+    sucursal_id: perfil?.sucursal_id ?? "",
+    email: "",
+    password: "",
+  });
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [dropdownSucursalAbierto, setDropdownSucursalAbierto] = useState(false);
+  const supabaseRef = useRef(createClient());
+  const dropdownSucursalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let activo = true
+    let activo = true;
     async function cargar() {
       const { data } = await supabaseRef.current
-        .from('sucursales')
-        .select('*')
-        .eq('activa', true)
-        .order('nombre')
-      if (activo && data) setSucursales(data)
+        .from("sucursales")
+        .select("*")
+        .eq("activa", true)
+        .order("nombre");
+      if (activo && data) setSucursales(data);
     }
-    cargar()
-    return () => { activo = false }
-  }, [])
+    cargar();
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickFuera(e: MouseEvent) {
-      if (dropdownSucursalRef.current && !dropdownSucursalRef.current.contains(e.target as Node)) {
-        setDropdownSucursalAbierto(false)
+      if (
+        dropdownSucursalRef.current &&
+        !dropdownSucursalRef.current.contains(e.target as Node)
+      ) {
+        setDropdownSucursalAbierto(false);
       }
     }
-    document.addEventListener('mousedown', handleClickFuera)
-    return () => document.removeEventListener('mousedown', handleClickFuera)
-  }, [])
+    document.addEventListener("mousedown", handleClickFuera);
+    return () => document.removeEventListener("mousedown", handleClickFuera);
+  }, []);
 
   function emailValido(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
   function handleNombreChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm(prev => ({ ...prev, nombre: e.target.value.slice(0, MAX_NOMBRE) }))
+    setForm((prev) => ({
+      ...prev,
+      nombre: e.target.value.slice(0, MAX_NOMBRE),
+    }));
   }
 
   function handleEmailChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm(prev => ({ ...prev, email: e.target.value.trim() }))
+    setForm((prev) => ({ ...prev, email: e.target.value.trim() }));
   }
 
   function handlePasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm(prev => ({ ...prev, password: e.target.value }))
+    setForm((prev) => ({ ...prev, password: e.target.value }));
   }
 
   function handleRolChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm(prev => ({ ...prev, rol: e.target.value }))
+    setForm((prev) => ({ ...prev, rol: e.target.value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+    e.preventDefault();
 
-    const nombreLimpio = form.nombre.trim()
+    const nombreLimpio = form.nombre.trim();
 
     if (!nombreLimpio) {
-      toast.warning('El nombre es obligatorio')
-      return
+      toast.warning("El nombre es obligatorio");
+      return;
     }
     if (nombreLimpio.length < 3) {
-      toast.warning('El nombre debe tener al menos 3 caracteres')
-      return
+      toast.warning("El nombre debe tener al menos 3 caracteres");
+      return;
     }
     if (!form.sucursal_id) {
-      toast.warning('Selecciona una sucursal')
-      return
+      toast.warning("Selecciona una sucursal");
+      return;
     }
     if (!esEdicion) {
       if (!form.email.trim()) {
-        toast.warning('El correo es obligatorio')
-        return
+        toast.warning("El correo es obligatorio");
+        return;
       }
       if (!emailValido(form.email)) {
-        toast.warning('Ingresa un correo electrónico válido')
-        return
+        toast.warning("Ingresa un correo electrónico válido");
+        return;
       }
       if (form.password.length < MIN_PASSWORD) {
-        toast.warning(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`)
-        return
+        toast.warning(
+          `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`,
+        );
+        return;
       }
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
       if (esEdicion && perfil) {
         const { data, error } = await supabase
-          .from('perfiles')
+          .from("perfiles")
           .update({
-            nombre:      nombreLimpio,
-            rol:         form.rol,
+            nombre: nombreLimpio,
+            rol: form.rol,
             sucursal_id: form.sucursal_id,
           })
-          .eq('id', perfil.id)
+          .eq("id", perfil.id)
           .select()
-          .single()
-        if (error) throw error
-        toast.success('Usuario actualizado correctamente')
-        onGuardado(data)
-        onClose()
+          .single();
+        if (error) throw error;
+        toast.success("Usuario actualizado correctamente");
+        onGuardado(data);
+        onClose();
       } else {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email:    form.email,
+        const resultado = await crearUsuario({
+          email: form.email,
           password: form.password,
-          options: {
-            data: {
-              nombre: nombreLimpio,
-            },
-          },
-        })
-        if (authError) throw authError
-        if (!authData.user) throw new Error('No se pudo crear el usuario')
+          nombre: nombreLimpio,
+          rol: form.rol,
+          sucursal_id: form.sucursal_id,
+        });
 
-        const { data: perfilData, error: perfilError } = await supabase
-          .from('perfiles')
-          .insert({
-            id:          authData.user.id,
-            nombre:      nombreLimpio,
-            rol:         form.rol,
-            sucursal_id: form.sucursal_id,
-          })
-          .select()
-          .single()
-        if (perfilError) throw perfilError
+        if (resultado.error) throw new Error(resultado.error);
 
-        toast.success('Usuario creado correctamente', {
-          description: `Se envió un correo de confirmación a ${form.email}`,
+        // Traer el perfil recién creado para actualizar la lista local
+        const supabase = createClient();
+        const { data: perfilData } = await supabase
+          .from("perfiles")
+          .select("*, sucursales(nombre)")
+          .eq("id", resultado.id!)
+          .single();
+
+        toast.success("Usuario creado correctamente", {
+          description: `Cuenta lista para ${form.email}`,
           duration: 6000,
-        })
-        onGuardado(perfilData)
-        onClose()
+        });
+        onGuardado(perfilData as unknown as Perfil);
+        onClose();
       }
     } catch (err) {
-      const mensaje = err instanceof Error ? err.message : 'Error desconocido'
-      if (mensaje.includes('already registered')) {
-        toast.error('Este correo ya está registrado')
+      const mensaje = err instanceof Error ? err.message : "Error desconocido";
+      if (mensaje.includes("already registered")) {
+        toast.error("Este correo ya está registrado");
       } else {
-        toast.error('Error al guardar el usuario', { description: mensaje })
+        toast.error("Error al guardar el usuario", { description: mensaje });
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-medium text-text-primary">
-            {esEdicion ? 'Editar usuario' : 'Nuevo usuario'}
+            {esEdicion ? "Editar usuario" : "Nuevo usuario"}
           </h2>
-          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary transition-colors">
+          <button
+            onClick={onClose}
+            className="text-text-tertiary hover:text-text-primary transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-text-secondary">
@@ -255,7 +265,7 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                     name="password"
                     value={form.password}
                     onChange={handlePasswordChange}
-                    type={mostrarPassword ? 'text' : 'password'}
+                    type={mostrarPassword ? "text" : "password"}
                     className="w-full px-3 py-2 pr-10 border border-border rounded-lg text-sm
                                focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                                text-text-primary"
@@ -263,7 +273,7 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                   />
                   <button
                     type="button"
-                    onClick={() => setMostrarPassword(v => !v)}
+                    onClick={() => setMostrarPassword((v) => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary
                                hover:text-text-primary transition-colors"
                   >
@@ -276,19 +286,19 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                       <div
                         className={`h-full transition-all ${
                           form.password.length < MIN_PASSWORD
-                            ? 'w-1/3 bg-danger'
+                            ? "w-1/3 bg-danger"
                             : form.password.length < 12
-                              ? 'w-2/3 bg-warning'
-                              : 'w-full bg-success'
+                              ? "w-2/3 bg-warning"
+                              : "w-full bg-success"
                         }`}
                       />
                     </div>
                     <span className="text-xs text-text-tertiary shrink-0">
                       {form.password.length < MIN_PASSWORD
-                        ? 'Débil'
+                        ? "Débil"
                         : form.password.length < 12
-                          ? 'Aceptable'
-                          : 'Fuerte'}
+                          ? "Aceptable"
+                          : "Fuerte"}
                     </span>
                   </div>
                 )}
@@ -304,18 +314,19 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
             <div className="relative" ref={dropdownSucursalRef}>
               <button
                 type="button"
-                onClick={() => setDropdownSucursalAbierto(v => !v)}
+                onClick={() => setDropdownSucursalAbierto((v) => !v)}
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 border
                            border-border rounded-lg text-sm bg-surface text-text-primary
                            hover:bg-hover transition-colors"
               >
-                <span className={form.sucursal_id ? '' : 'text-text-tertiary'}>
-                  {sucursales.find(s => s.id === form.sucursal_id)?.nombre ?? 'Seleccionar sucursal...'}
+                <span className={form.sucursal_id ? "" : "text-text-tertiary"}>
+                  {sucursales.find((s) => s.id === form.sucursal_id)?.nombre ??
+                    "Seleccionar sucursal..."}
                 </span>
                 <ChevronDown
                   size={15}
                   className={`text-text-tertiary transition-transform duration-200 shrink-0 ${
-                    dropdownSucursalAbierto ? 'rotate-180' : ''
+                    dropdownSucursalAbierto ? "rotate-180" : ""
                   }`}
                 />
               </button>
@@ -324,19 +335,19 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                 className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
                             border-border rounded-xl shadow-lg z-20 overflow-hidden
                             origin-top transition-all duration-150 ${
-                  dropdownSucursalAbierto
-                    ? 'opacity-100 scale-100'
-                    : 'opacity-0 scale-95 pointer-events-none'
-                }`}
+                              dropdownSucursalAbierto
+                                ? "opacity-100 scale-100"
+                                : "opacity-0 scale-95 pointer-events-none"
+                            }`}
               >
                 <div className="py-1 max-h-60 overflow-y-auto">
-                  {sucursales.map(s => (
+                  {sucursales.map((s) => (
                     <button
                       key={s.id}
                       type="button"
                       onClick={() => {
-                        setForm(prev => ({ ...prev, sucursal_id: s.id }))
-                        setDropdownSucursalAbierto(false)
+                        setForm((prev) => ({ ...prev, sucursal_id: s.id }));
+                        setDropdownSucursalAbierto(false);
                       }}
                       className="w-full flex items-center justify-between gap-2 px-3.5 py-2
                                  text-sm text-text-primary hover:bg-hover transition-colors text-left"
@@ -357,15 +368,15 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
               Rol <span className="text-danger">*</span>
             </label>
             <div className="space-y-2">
-              {ROLES.map(rol => (
+              {ROLES.map((rol) => (
                 <label
                   key={rol.value}
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer
                               transition-colors ${
-                    form.rol === rol.value
-                      ? 'border-accent bg-accent-soft'
-                      : 'border-border hover:bg-hover'
-                  }`}
+                                form.rol === rol.value
+                                  ? "border-accent bg-accent-soft"
+                                  : "border-border hover:bg-hover"
+                              }`}
                 >
                   <input
                     type="radio"
@@ -376,7 +387,9 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                     className="mt-0.5"
                   />
                   <div>
-                    <p className="text-sm font-medium text-text-primary">{rol.label}</p>
+                    <p className="text-sm font-medium text-text-primary">
+                      {rol.label}
+                    </p>
                     <p className="text-xs text-text-secondary">{rol.desc}</p>
                   </div>
                 </label>
@@ -400,12 +413,15 @@ export function UsuarioModal({ perfil, onClose, onGuardado }: Props) {
                          font-medium hover:bg-accent-hover transition-colors
                          disabled:opacity-50"
             >
-              {loading ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear usuario'}
+              {loading
+                ? "Guardando..."
+                : esEdicion
+                  ? "Guardar cambios"
+                  : "Crear usuario"}
             </button>
           </div>
-
         </form>
       </div>
     </div>
-  )
+  );
 }
