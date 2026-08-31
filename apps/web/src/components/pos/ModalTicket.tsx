@@ -95,8 +95,8 @@ export function ModalTicket({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl my-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl my-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h2 className="font-medium text-text-primary">Venta completada</h2>
@@ -123,7 +123,7 @@ export function ModalTicket({
                   : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              Térmica 80mm
+              Térmica 58mm
             </button>
             <button
               onClick={() => setTermica(false)}
