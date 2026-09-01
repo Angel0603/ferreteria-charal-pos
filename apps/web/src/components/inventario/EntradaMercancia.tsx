@@ -1,7 +1,13 @@
 "use client";
-
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Plus, Trash2, Search, AlertTriangle } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Search,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
@@ -25,7 +31,18 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
   const [cajeroId, setCajeroId] = useState("");
   const [stockBajo, setStockBajo] = useState<StockBajo[]>([]);
   const supabaseRef = useRef(createClient());
+  const [paginaStockBajo, setPaginaStockBajo] = useState(0);
+  const POR_PAGINA_STOCK = 10;
+  const totalPaginasStock = Math.max(
+    1,
+    Math.ceil(stockBajo.length / POR_PAGINA_STOCK),
+  );
+  const paginaActualStock = Math.min(paginaStockBajo, totalPaginasStock - 1);
 
+  const stockBajoPaginado = useMemo(() => {
+    const desde = paginaActualStock * POR_PAGINA_STOCK;
+    return stockBajo.slice(desde, desde + POR_PAGINA_STOCK);
+  }, [stockBajo, paginaActualStock]);
   const resultados = useMemo(() => {
     if (!busqueda.trim()) return [];
     const q = busqueda.toLowerCase();
@@ -187,101 +204,6 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
 
   return (
     <div className="space-y-4">
-      {/* Productos con stock bajo */}
-      {stockBajo.length > 0 && (
-        <div className="bg-surface rounded-xl border border-border overflow-hidden">
-          <div
-            className="flex items-center gap-3 px-4 py-3 my-2 border-b border-border
-                    border-l-[3px] border-l-warning"
-          >
-            <AlertTriangle size={16} className="text-warning shrink-0" />
-            <p className="text-sm text-text-primary">
-              <span className="font-medium">
-                {stockBajo.length} producto{stockBajo.length !== 1 ? "s" : ""}
-              </span>{" "}
-              por surtir
-            </p>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-surface-2">
-                <th className="text-left text-xs font-medium text-text-secondary px-4 py-2">
-                  Producto
-                </th>
-                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
-                  Stock actual
-                </th>
-                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
-                  Mínimo
-                </th>
-                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
-                  Faltante
-                </th>
-                <th className="px-4 py-2 w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {stockBajo.map((item) => {
-                const yaAgregado = lineas.some(
-                  (l) => l.producto.id === item.producto_id,
-                );
-                return (
-                  <tr
-                    key={item.producto_id}
-                    className={`transition-colors ${
-                      yaAgregado ? "bg-success-soft/50" : "hover:bg-hover"
-                    }`}
-                  >
-                    <td className="px-4 py-2.5">
-                      <p className="text-sm font-medium text-text-primary">
-                        {item.nombre}
-                      </p>
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span
-                        className={`text-sm font-medium font-mono ${
-                          item.cantidad === 0 ? "text-danger" : "text-warning"
-                        }`}
-                      >
-                        {item.cantidad}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-sm text-text-secondary font-mono">
-                      {item.stock_minimo}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span className="text-sm font-semibold text-danger font-mono">
-                        +{item.faltante}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {yaAgregado ? (
-                        <span className="text-xs text-success font-medium">
-                          ✓
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            const prod = productos.find(
-                              (p) => p.id === item.producto_id,
-                            );
-                            if (prod) agregarLinea(prod);
-                          }}
-                          className="text-xs text-text-secondary hover:text-text-primary
-                         border border-border rounded-lg px-2 py-1
-                         hover:bg-hover transition-colors whitespace-nowrap"
-                        >
-                          + Agregar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
       {/* Buscador */}
       <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
         <h2 className="text-sm font-medium text-text-primary">
@@ -418,6 +340,145 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
               {loading ? "Registrando..." : "Registrar entrada"}
             </button>
           </div>
+        </div>
+      )}
+      {/* Productos con stock bajo */}
+      {stockBajo.length > 0 && (
+        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div
+            className="flex items-center gap-3 px-4 py-3 border-b border-border
+                    border-l-[3px] border-l-warning"
+          >
+            <AlertTriangle size={16} className="text-warning shrink-0" />
+            <p className="text-sm text-text-primary">
+              <span className="font-medium">
+                {stockBajo.length} producto{stockBajo.length !== 1 ? "s" : ""}
+              </span>{" "}
+              por surtir
+            </p>
+            <span className="ml-auto text-xs text-text-tertiary">
+              Haz clic para agregar
+            </span>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border bg-surface-2">
+                <th className="text-left text-xs font-medium text-text-secondary px-4 py-2">
+                  Producto
+                </th>
+                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
+                  Stock actual
+                </th>
+                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
+                  Mínimo
+                </th>
+                <th className="text-right text-xs font-medium text-text-secondary px-4 py-2">
+                  Faltante
+                </th>
+                <th className="px-4 py-2 w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {stockBajoPaginado.map((item) => {
+                const yaAgregado = lineas.some(
+                  (l) => l.producto.id === item.producto_id,
+                );
+                return (
+                  <tr
+                    key={item.producto_id}
+                    className={`transition-colors ${
+                      yaAgregado ? "bg-success-soft/50" : "hover:bg-hover"
+                    }`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <p className="text-sm font-medium text-text-primary">
+                        {item.nombre}
+                      </p>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span
+                        className={`text-sm font-medium font-mono ${
+                          item.cantidad === 0 ? "text-danger" : "text-warning"
+                        }`}
+                      >
+                        {item.cantidad}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-sm text-text-secondary font-mono">
+                      {item.stock_minimo}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span className="text-sm font-semibold text-danger font-mono">
+                        +{item.faltante}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {yaAgregado ? (
+                        <span className="text-xs text-success font-medium">
+                          ✓
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const prod = productos.find(
+                              (p) => p.id === item.producto_id,
+                            );
+                            if (prod) agregarLinea(prod);
+                          }}
+                          className="text-xs text-text-secondary hover:text-text-primary
+                         border border-border rounded-lg px-2 py-1
+                         hover:bg-hover transition-colors whitespace-nowrap"
+                        >
+                          + Agregar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Footer paginación */}
+          {stockBajo.length > POR_PAGINA_STOCK && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-2">
+              <p className="text-xs text-text-tertiary">
+                Mostrando {paginaActualStock * POR_PAGINA_STOCK + 1}–
+                {Math.min(
+                  (paginaActualStock + 1) * POR_PAGINA_STOCK,
+                  stockBajo.length,
+                )}{" "}
+                de {stockBajo.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPaginaStockBajo((p) => Math.max(0, p - 1))}
+                  disabled={paginaActualStock === 0}
+                  className="w-7 h-7 rounded-lg border border-border text-text-secondary
+                       hover:bg-hover transition-colors disabled:opacity-40
+                       disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-xs text-text-secondary px-2 font-mono">
+                  {paginaActualStock + 1} / {totalPaginasStock}
+                </span>
+                <button
+                  onClick={() =>
+                    setPaginaStockBajo((p) =>
+                      Math.min(totalPaginasStock - 1, p + 1),
+                    )
+                  }
+                  disabled={paginaActualStock >= totalPaginasStock - 1}
+                  className="w-7 h-7 rounded-lg border border-border text-text-secondary
+                       hover:bg-hover transition-colors disabled:opacity-40
+                       disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
