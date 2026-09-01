@@ -41,6 +41,7 @@ export function ProductoModal({
     activo: producto?.activo ?? true,
   });
 
+  const [cantidadInicial, setCantidadInicial] = useState(0);
   const [imagen, setImagen] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(
     producto?.imagen_url ?? null,
@@ -53,16 +54,20 @@ export function ProductoModal({
   const [dropdownCategoriaAbierto, setDropdownCategoriaAbierto] =
     useState(false);
   const dropdownCategoriaRef = useRef<HTMLDivElement>(null);
+
   function generarSKU(nombre: string): string {
     return nombre
       .trim()
       .split(/\s+/)
-      .map((palabra) =>
-        palabra
+      .map((palabra) => {
+        // Si la palabra es solo números, agregarla completa
+        if (/^\d+$/.test(palabra)) return palabra;
+        // Si contiene letras (con o sin números mezclados), cortar a 4 caracteres
+        return palabra
           .replace(/[^a-zA-Z0-9]/g, "")
           .slice(0, 4)
-          .toUpperCase(),
-      )
+          .toUpperCase();
+      })
       .filter(Boolean)
       .join("-");
   }
@@ -219,6 +224,31 @@ export function ProductoModal({
           .select("*, categorias(nombre)")
           .single();
         if (error) throw error;
+
+        // Registrar inventario inicial si la cantidad es mayor a 0
+        if (cantidadInicial > 0) {
+          // Obtener sucursal del usuario actual
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user) {
+            const { data: perfil } = await supabase
+              .from("perfiles")
+              .select("sucursal_id")
+              .eq("id", user.id)
+              .single();
+
+            if (perfil?.sucursal_id) {
+              await supabase.rpc("registrar_stock_inicial", {
+                p_producto_id: data.id,
+                p_sucursal_id: perfil.sucursal_id,
+                p_usuario_id: user.id,
+                p_cantidad: cantidadInicial,
+              });
+            }
+          }
+        }
+
         toast.success("Producto creado correctamente");
         onGuardado(data as unknown as Producto);
       }
@@ -579,6 +609,7 @@ export function ProductoModal({
             </div>
           </div>
 
+          {/* Stock mínimo */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">
               Stock mínimo
@@ -595,6 +626,32 @@ export function ProductoModal({
               placeholder="0"
             />
           </div>
+
+          {/* Cantidad inicial — solo al crear */}
+          {!esEdicion && (
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">
+                Stock actual
+                <span className="ml-2 text-xs text-text-tertiary font-normal">
+                  se registra en tu sucursal automáticamente
+                </span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={cantidadInicial === 0 ? "" : cantidadInicial}
+                onChange={(e) => {
+                  const val =
+                    parseInt(e.target.value.replace(/[^0-9]/g, "")) || 0;
+                  setCantidadInicial(val);
+                }}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                 focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                 text-text-primary"
+                placeholder="0"
+              />
+            </div>
+          )}
 
           {/* Descripción */}
           <div>
