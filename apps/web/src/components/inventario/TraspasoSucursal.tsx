@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
 import { ModalSucursal } from "./ModalSucursal";
+import { normalizar } from "@/lib/utils";
 
 type Sucursal = Database["public"]["Tables"]["sucursales"]["Row"];
 
@@ -23,10 +24,12 @@ type ProductoStock = {
     | {
         nombre: string;
         sku: string | null;
+        codigo_barras: string | null;
       }
     | {
         nombre: string;
         sku: string | null;
+        codigo_barras: string | null;
       }[];
 };
 
@@ -110,7 +113,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
     async function cargarStock() {
       const { data } = await supabaseRef.current
         .from("inventario")
-        .select("cantidad, producto_id, productos(nombre, sku)")
+        .select("cantidad, producto_id, productos(nombre, sku, codigo_barras)")
         .eq("sucursal_id", sucursalOrigen)
         .gt("cantidad", 0);
       if (activo && data) setProductos(data as unknown as ProductoStock[]);
@@ -123,13 +126,14 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
 
   const resultados = useMemo(() => {
     if (!busqueda.trim()) return [];
-    const q = busqueda.toLowerCase();
+    const q = normalizar(busqueda);
     return productos
       .filter((p) => {
         const prod = Array.isArray(p.productos) ? p.productos[0] : p.productos;
         return (
-          prod.nombre.toLowerCase().includes(q) ||
-          prod.sku?.toLowerCase().includes(q)
+          normalizar(prod.nombre).includes(q) ||
+          normalizar(prod.sku ?? "").includes(q) ||
+          (prod.codigo_barras ?? "").includes(busqueda)
         );
       })
       .slice(0, 6);
@@ -400,7 +404,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto con stock disponible..."
+            placeholder="Buscar producto con stock disponible por nombre, SKU o código de barras..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"

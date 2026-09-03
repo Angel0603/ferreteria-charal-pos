@@ -11,7 +11,7 @@ export function useBuscador(sucursalId: string) {
   const [resultados,  setResultados]  = useState<Producto[]>([])
   const [loading,     setLoading]     = useState(false)
   const [categoriaId, setCategoriaId] = useState('')
-  const supabaseRef   = useRef(createClient())
+  const supabaseRef = useRef(createClient())
 
   useEffect(() => {
     if (!sucursalId) return
@@ -30,19 +30,15 @@ export function useBuscador(sucursalId: string) {
           return
         }
 
-        // Con búsqueda O categoría: buscar en catálogo completo
-        let q = supabase
-          .from('productos')
-          .select('*')
-          .eq('activo', true)
-          .order('nombre')
-          .limit(40)
+        // Con búsqueda O categoría: usar función con unaccent
+        const { data } = await supabase
+          .rpc('buscar_productos_nombre', {
+            p_query:        query || '',
+            p_categoria_id: categoriaId || null,
+            p_solo_activos: true,
+          })
 
-        if (query)       q = q.or(`nombre.ilike.%${query}%,codigo_barras.eq.${query}`)
-        if (categoriaId) q = q.eq('categoria_id', categoriaId)
-
-        const { data } = await q
-        if (activo && data) setResultados(data as Producto[])
+        if (activo && data) setResultados(data as unknown as Producto[])
       } finally {
         if (activo) setLoading(false)
       }

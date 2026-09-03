@@ -54,6 +54,8 @@ export function ProductoModal({
   const [dropdownCategoriaAbierto, setDropdownCategoriaAbierto] =
     useState(false);
   const dropdownCategoriaRef = useRef<HTMLDivElement>(null);
+  const [dropdownUnidadAbierto, setDropdownUnidadAbierto] = useState(false);
+  const dropdownUnidadRef = useRef<HTMLDivElement>(null);
 
   function generarSKU(nombre: string): string {
     return nombre
@@ -72,7 +74,48 @@ export function ProductoModal({
       .join("-");
   }
 
+  function generarCodigoBarras(): string {
+    // Genera los primeros 12 dígitos aleatorios
+    const digitos = Array.from({ length: 12 }, () =>
+      Math.floor(Math.random() * 10),
+    );
+
+    // Calcula el dígito verificador EAN-13
+    const suma = digitos.reduce(
+      (acc, d, i) => acc + d * (i % 2 === 0 ? 1 : 3),
+      0,
+    );
+    const verificador = (10 - (suma % 10)) % 10;
+
+    return [...digitos, verificador].join("");
+  }
+
   const skuEditadoManualmente = useRef(false);
+  const categoriaAsignadaAuto = useRef(false);
+  const supabaseModal = useRef(createClient());
+
+  async function detectarCategoriaPorPalabra(primeraPalabra: string) {
+    if (categoriaAsignadaAuto.current) return;
+    if (primeraPalabra.length < 3) return;
+
+    const { data } = await supabaseModal.current
+      .from("productos")
+      .select("categoria_id")
+      .ilike("nombre", `${primeraPalabra}%`)
+      .not("categoria_id", "is", null)
+      .limit(1)
+      .single();
+
+    if (data?.categoria_id) {
+      setForm((prev) => {
+        if (prev.categoria_id === "") {
+          categoriaAsignadaAuto.current = true;
+          return { ...prev, categoria_id: data.categoria_id! };
+        }
+        return prev;
+      });
+    }
+  }
 
   function handleChange(
     e: React.ChangeEvent<
@@ -85,12 +128,35 @@ export function ProductoModal({
       skuEditadoManualmente.current = true;
     }
 
-    if (name === "nombre" && !skuEditadoManualmente.current) {
-      setForm((prev) => ({
-        ...prev,
-        nombre: value,
-        sku: generarSKU(value),
-      }));
+    if (name === "nombre") {
+      const primeraPalabra = value.trim().split(/\s+/)[0];
+
+      if (!value.trim()) {
+        // Si borra el nombre, resetear todo lo automático
+        categoriaAsignadaAuto.current = false;
+        setForm((prev) => ({
+          ...prev,
+          nombre: value,
+          sku: "",
+          categoria_id: "",
+        }));
+        return;
+      }
+
+      if (!skuEditadoManualmente.current) {
+        setForm((prev) => ({
+          ...prev,
+          nombre: value,
+          sku: generarSKU(value),
+        }));
+      } else {
+        setForm((prev) => ({ ...prev, nombre: value }));
+      }
+
+      if (primeraPalabra.length >= 3) {
+        detectarCategoriaPorPalabra(primeraPalabra);
+      }
+
       return;
     }
 
@@ -119,11 +185,30 @@ export function ProductoModal({
     return () => document.removeEventListener("mousedown", handleClickFuera);
   }, []);
 
+  useEffect(() => {
+    function handleClickFuera(e: MouseEvent) {
+      if (
+        dropdownUnidadRef.current &&
+        !dropdownUnidadRef.current.contains(e.target as Node)
+      ) {
+        setDropdownUnidadAbierto(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickFuera);
+    return () => document.removeEventListener("mousedown", handleClickFuera);
+  }, []);
+
   function handleSeleccionarCategoria(valor: string) {
     if (valor === "__nueva__") {
       setCreandoCategoria(true);
       setDropdownCategoriaAbierto(false);
       return;
+    }
+    // Si selecciona "Sin categoría", permitir que vuelva a detectar automáticamente
+    if (valor === "") {
+      categoriaAsignadaAuto.current = false;
+    } else {
+      categoriaAsignadaAuto.current = true;
     }
     setForm((prev) => ({ ...prev, categoria_id: valor }));
     setDropdownCategoriaAbierto(false);
@@ -301,7 +386,7 @@ export function ProductoModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="text-lg font-semibold text-text-primary">
@@ -315,374 +400,429 @@ export function ProductoModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Imagen */}
-          <div className="flex items-center gap-4">
-            <div
-              className="relative w-20 h-20 rounded-xl border border-border
-                overflow-hidden bg-surface-2 shrink-0 flex items-center justify-center"
-            >
-              {preview ? (
-                <Image
-                  src={preview}
-                  alt="preview"
-                  fill
-                  sizes="160px"
-                  className="object-contain p-1"
-                />
-              ) : (
-                <Upload size={20} className="text-text-tertiary" />
-              )}
-            </div>
-            <div>
-              <label
-                className="cursor-pointer text-sm font-medium text-text-secondary
-                                hover:text-text-primary transition-colors"
-              >
-                {preview ? "Cambiar imagen" : "Subir imagen"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImagen}
-                  className="hidden"
-                />
-              </label>
-              <p className="text-xs text-text-tertiary mt-1">
-                PNG, JPG hasta 2MB
-              </p>
-            </div>
-          </div>
-
-          {/* Nombre y categoría */}
+        <form onSubmit={handleSubmit} className="p-6">
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Nombre <span className="text-danger">*</span>
-              </label>
-              <input
-                name="nombre"
-                value={form.nombre}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm
-                           focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                           text-text-primary"
-                placeholder="Ej. Martillo de uña 16oz"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Categoría
-              </label>
-
-              <div className="relative" ref={dropdownCategoriaRef}>
-                <button
-                  type="button"
-                  onClick={() => setDropdownCategoriaAbierto((v) => !v)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 border
-                 border-border rounded-lg text-sm bg-surface text-text-primary
-                 hover:bg-hover transition-colors"
-                >
-                  <span
-                    className={form.categoria_id ? "" : "text-text-tertiary"}
-                  >
-                    {categorias.find((c) => c.id === form.categoria_id)
-                      ?.nombre ?? "Sin categoría"}
-                  </span>
-                  <ChevronDown
-                    size={15}
-                    className={`text-text-tertiary transition-transform duration-200 shrink-0 ${
-                      dropdownCategoriaAbierto ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-
+            {/* Columna izquierda */}
+            <div className="space-y-4">
+              {/* Imagen */}
+              <div className="flex items-center gap-4">
                 <div
-                  className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
-                  border-border rounded-xl shadow-lg z-20 overflow-hidden
-                  origin-top transition-all duration-150 ${
-                    dropdownCategoriaAbierto
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-95 pointer-events-none"
-                  }`}
+                  className="relative w-16 h-16 rounded-xl border border-border
+                        overflow-hidden bg-surface-2 shrink-0 flex items-center justify-center"
                 >
-                  <div className="py-1 max-h-60 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleSeleccionarCategoria("")}
-                      className="w-full flex items-center justify-between gap-2 px-3.5 py-2
-                     text-sm text-text-primary hover:bg-hover transition-colors text-left"
-                    >
-                      Sin categoría
-                      {!form.categoria_id && (
-                        <Check size={14} className="text-accent shrink-0" />
-                      )}
-                    </button>
+                  {preview ? (
+                    <Image
+                      src={preview}
+                      alt="preview"
+                      fill
+                      sizes="128px"
+                      className="object-contain p-1"
+                    />
+                  ) : (
+                    <Upload size={18} className="text-text-tertiary" />
+                  )}
+                </div>
+                <div>
+                  <label
+                    className="cursor-pointer text-sm font-medium text-text-secondary
+                            hover:text-text-primary transition-colors"
+                  >
+                    {preview ? "Cambiar imagen" : "Subir imagen"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImagen}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="text-xs text-text-tertiary mt-1">
+                    PNG, JPG hasta 2MB
+                  </p>
+                </div>
+              </div>
 
-                    {categorias.map((c) => (
+              {/* Nombre */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Nombre <span className="text-danger">*</span>
+                </label>
+                <input
+                  name="nombre"
+                  value={form.nombre}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                     text-text-primary"
+                  placeholder="Ej. Martillo de uña 16oz"
+                />
+              </div>
+
+              {/* Categoría */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Categoría
+                </label>
+                <div className="relative" ref={dropdownCategoriaRef}>
+                  <button
+                    type="button"
+                    onClick={() => setDropdownCategoriaAbierto((v) => !v)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 border
+                       border-border rounded-lg text-sm bg-surface text-text-primary
+                       hover:bg-hover transition-colors"
+                  >
+                    <span
+                      className={form.categoria_id ? "" : "text-text-tertiary"}
+                    >
+                      {categorias.find((c) => c.id === form.categoria_id)
+                        ?.nombre ?? "Sin categoría"}
+                    </span>
+                    <ChevronDown
+                      size={15}
+                      className={`text-text-tertiary transition-transform duration-200 shrink-0 ${
+                        dropdownCategoriaAbierto ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  <div
+                    className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
+                        border-border rounded-xl shadow-lg z-20 overflow-hidden
+                        origin-top transition-all duration-150 ${
+                          dropdownCategoriaAbierto
+                            ? "opacity-100 scale-100"
+                            : "opacity-0 scale-95 pointer-events-none"
+                        }`}
+                  >
+                    <div className="py-1 max-h-48 overflow-y-auto">
                       <button
-                        key={c.id}
                         type="button"
-                        onClick={() => handleSeleccionarCategoria(c.id)}
+                        onClick={() => handleSeleccionarCategoria("")}
                         className="w-full flex items-center justify-between gap-2 px-3.5 py-2
-                       text-sm text-text-primary hover:bg-hover transition-colors text-left"
+                           text-sm text-text-primary hover:bg-hover transition-colors text-left"
                       >
-                        {c.nombre}
-                        {form.categoria_id === c.id && (
+                        Sin categoría
+                        {!form.categoria_id && (
                           <Check size={14} className="text-accent shrink-0" />
                         )}
                       </button>
-                    ))}
+                      {categorias.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => handleSeleccionarCategoria(c.id)}
+                          className="w-full flex items-center justify-between gap-2 px-3.5 py-2
+                             text-sm text-text-primary hover:bg-hover transition-colors text-left"
+                        >
+                          {c.nombre}
+                          {form.categoria_id === c.id && (
+                            <Check size={14} className="text-accent shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                      <div className="border-t border-border my-1" />
+                      <button
+                        type="button"
+                        onClick={() => handleSeleccionarCategoria("__nueva__")}
+                        className="w-full flex items-center gap-2 px-3.5 py-2 text-sm
+                           text-accent hover:bg-hover transition-colors text-left font-medium"
+                      >
+                        + Agregar nueva categoría...
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="border-t border-border my-1" />
+                {creandoCategoria && (
+                  <div className="grid gap-2 mt-2">
+                    <input
+                      value={nuevaCategoria}
+                      onChange={(e) => setNuevaCategoria(e.target.value)}
+                      placeholder="Nombre de la nueva categoría"
+                      autoFocus
+                      className="flex-1 px-3 py-2 border border-border rounded-lg text-sm
+                         focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                         text-text-primary"
+                    />
+                    <div className="flex gap-4 justify-end">
+                      <button
+                        type="button"
+                        onClick={handleCrearCategoria}
+                        disabled={!nuevaCategoria.trim()}
+                        className="px-3 py-2 bg-accent text-white rounded-lg text-sm font-medium
+                           hover:bg-accent-hover transition-colors disabled:opacity-50"
+                      >
+                        Crear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreandoCategoria(false);
+                          setNuevaCategoria("");
+                        }}
+                        className="px-3 py-2 border border-border rounded-lg text-sm text-text-secondary
+                           hover:bg-hover transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSeleccionarCategoria("__nueva__")}
-                      className="w-full flex items-center gap-2 px-3.5 py-2 text-sm
-                     text-accent hover:bg-hover transition-colors text-left font-medium"
-                    >
-                      + Agregar nueva categoría...
-                    </button>
+              {/* Código de barras */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Código de barras
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    name="codigo_barras"
+                    value={form.codigo_barras}
+                    onChange={handleCodigoBarrasChange}
+                    inputMode="numeric"
+                    className="flex-1 px-3 py-2 border border-border rounded-lg text-sm
+                 focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                 text-text-primary font-mono"
+                    placeholder="7501234567890"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        codigo_barras: generarCodigoBarras(),
+                      }))
+                    }
+                    title="Generar código de barras automático"
+                    className="px-3 py-2 border border-border rounded-lg text-text-secondary
+                 hover:text-text-primary hover:bg-hover transition-colors text-xs
+                 whitespace-nowrap shrink-0"
+                  >
+                    Generar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEscanerAbierto(true)}
+                    className="px-3 py-2 border border-border rounded-lg text-text-secondary
+                 hover:text-text-primary hover:bg-hover transition-colors"
+                    title="Escanear con cámara"
+                  >
+                    <Camera size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* SKU */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  SKU
+                  <span className="ml-2 text-xs text-text-tertiary font-normal">
+                    generado automáticamente
+                  </span>
+                </label>
+                <input
+                  name="sku"
+                  value={form.sku}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-accent
+                     bg-surface-2 text-text-secondary font-mono"
+                  placeholder="Se genera con el nombre"
+                />
+              </div>
+            </div>
+
+            {/* Columna derecha */}
+            <div className="space-y-4">
+              {/* Unidad */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Unidad
+                </label>
+                <div className="relative" ref={dropdownUnidadRef}>
+                  <button
+                    type="button"
+                    onClick={() => setDropdownUnidadAbierto((v) => !v)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 border
+                 border-border rounded-lg text-sm bg-surface text-text-primary
+                 hover:bg-hover transition-colors"
+                  >
+                    <span>{form.unidad}</span>
+                    <ChevronDown
+                      size={15}
+                      className={`text-text-tertiary transition-transform duration-200 shrink-0 ${
+                        dropdownUnidadAbierto ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  <div
+                    className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
+                  border-border rounded-xl shadow-lg z-20 overflow-hidden
+                  origin-top transition-all duration-150 ${
+                    dropdownUnidadAbierto
+                      ? "opacity-100 scale-100"
+                      : "opacity-0 scale-95 pointer-events-none"
+                  }`}
+                  >
+                    <div className="py-1">
+                      {[
+                        "pieza",
+                        "metro",
+                        "litro",
+                        "kilo",
+                        "caja",
+                        "rollo",
+                        "par",
+                        "juego",
+                      ].map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, unidad: u }));
+                            setDropdownUnidadAbierto(false);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 px-3.5 py-2
+                       text-sm text-text-primary hover:bg-hover transition-colors text-left"
+                        >
+                          {u}
+                          {form.unidad === u && (
+                            <Check size={14} className="text-accent shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {creandoCategoria && (
-                <div className="grid gap-2 mt-2">
+              {/* Precio base */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Precio base <span className="text-danger">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-sm">
+                    $
+                  </span>
                   <input
-                    value={nuevaCategoria}
-                    onChange={(e) => setNuevaCategoria(e.target.value)}
-                    placeholder="Nombre de la nueva categoría"
-                    autoFocus
-                    className="flex-1 px-3 py-2 border border-border rounded-lg text-sm
-       focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-       text-text-primary"
+                    name="precio_base"
+                    type="text"
+                    inputMode="decimal"
+                    value={form.precio_base === 0 ? "" : form.precio_base}
+                    onChange={handleChange}
+                    required
+                    className="w-full pl-7 pr-3 py-2 border border-border rounded-lg text-sm
+                       focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                       text-text-primary"
+                    placeholder="0.00"
                   />
-                  <div className="flex gap-4 justify-end">
-                    <button
-                      type="button"
-                      onClick={handleCrearCategoria}
-                      disabled={!nuevaCategoria.trim()}
-                      className="px-3 py-2 bg-accent text-white rounded-lg text-sm font-medium
-       hover:bg-accent-hover transition-colors disabled:opacity-50"
-                    >
-                      Crear
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCreandoCategoria(false);
-                        setNuevaCategoria("");
-                      }}
-                      className="px-3 py-2 border border-border rounded-lg text-sm text-text-secondary
-       hover:bg-hover transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
+                </div>
+              </div>
+
+              {/* Precio mayoreo */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Precio mayoreo
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-sm">
+                    $
+                  </span>
+                  <input
+                    name="precio_mayoreo"
+                    type="text"
+                    inputMode="decimal"
+                    value={form.precio_mayoreo === 0 ? "" : form.precio_mayoreo}
+                    onChange={handleChange}
+                    className="w-full pl-7 pr-3 py-2 border border-border rounded-lg text-sm
+                       focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                       text-text-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Stock mínimo */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Stock mínimo
+                </label>
+                <input
+                  name="stock_minimo"
+                  type="text"
+                  inputMode="numeric"
+                  value={form.stock_minimo === 0 ? "" : form.stock_minimo}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                     text-text-primary"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Cantidad inicial */}
+              {!esEdicion && (
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Stock actual
+                    <span className="ml-2 text-xs text-text-tertiary font-normal">
+                      se registra en tu sucursal automáticamente
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={cantidadInicial === 0 ? "" : cantidadInicial}
+                    onChange={(e) => {
+                      const val =
+                        parseInt(e.target.value.replace(/[^0-9]/g, "")) || 0;
+                      setCantidadInicial(val);
+                    }}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                       focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                       text-text-primary"
+                    placeholder="0"
+                  />
                 </div>
               )}
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Descripción
+                </label>
+                <textarea
+                  name="descripcion"
+                  value={form.descripcion ?? ""}
+                  onChange={handleChange}
+                  rows={!esEdicion ? 2 : 3}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+                     text-text-primary resize-none"
+                  placeholder="Descripción opcional del producto"
+                />
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Unidad
-              </label>
-              <select
-                name="unidad"
-                value={form.unidad}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm
-                           focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                           text-text-primary"
-              >
-                {[
-                  "pieza",
-                  "metro",
-                  "litro",
-                  "kilo",
-                  "caja",
-                  "rollo",
-                  "par",
-                  "juego",
-                ].map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Códigos */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Código de barras
-            </label>
-            <div className="flex gap-2">
-              <input
-                name="codigo_barras"
-                value={form.codigo_barras}
-                onChange={handleCodigoBarrasChange}
-                inputMode="numeric"
-                className="flex-1 px-3 py-2 border border-border rounded-lg text-sm
-                focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-              text-text-primary font-mono"
-                placeholder="7501234567890"
-              />
-              <button
-                type="button"
-                onClick={() => setEscanerAbierto(true)}
-                className="px-3 py-2 border border-border rounded-lg text-text-secondary
-                 hover:text-text-primary hover:bg-hover transition-colors"
-                title="Escanear con cámara"
-              >
-                <Camera size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* SKU */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              SKU
-              <span className="ml-2 text-xs text-text-tertiary font-normal">
-                generado automáticamente
-              </span>
-            </label>
-            <input
-              name="sku"
-              value={form.sku}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm
-               focus:outline-none focus:ring-2 focus:ring-accent
-               bg-surface-2 text-text-secondary font-mono"
-              placeholder="Se genera con el nombre"
-            />
-          </div>
-
-          {/* Precios */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Precio base <span className="text-danger">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-sm">
-                $
-              </span>
-              <input
-                name="precio_base"
-                type="text"
-                inputMode="decimal"
-                value={form.precio_base === 0 ? "" : form.precio_base}
-                onChange={handleChange}
-                required
-                className="w-full pl-7 pr-3 py-2 border border-border rounded-lg text-sm
-                 focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                 text-text-primary"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Precio mayoreo
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-sm">
-                $
-              </span>
-              <input
-                name="precio_mayoreo"
-                type="text"
-                inputMode="decimal"
-                value={form.precio_mayoreo === 0 ? "" : form.precio_mayoreo}
-                onChange={handleChange}
-                className="w-full pl-7 pr-3 py-2 border border-border rounded-lg text-sm
-                 focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                 text-text-primary"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          {/* Stock mínimo */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Stock mínimo
-            </label>
-            <input
-              name="stock_minimo"
-              type="text"
-              inputMode="numeric"
-              value={form.stock_minimo === 0 ? "" : form.stock_minimo}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm
-               focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-               text-text-primary"
-              placeholder="0"
-            />
-          </div>
-
-          {/* Cantidad inicial — solo al crear */}
-          {!esEdicion && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Stock actual
-                <span className="ml-2 text-xs text-text-tertiary font-normal">
-                  se registra en tu sucursal automáticamente
-                </span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={cantidadInicial === 0 ? "" : cantidadInicial}
-                onChange={(e) => {
-                  const val =
-                    parseInt(e.target.value.replace(/[^0-9]/g, "")) || 0;
-                  setCantidadInicial(val);
-                }}
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm
-                 focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                 text-text-primary"
-                placeholder="0"
-              />
-            </div>
-          )}
-
-          {/* Descripción */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Descripción
-            </label>
-            <textarea
-              name="descripcion"
-              value={form.descripcion ?? ""}
-              onChange={handleChange}
-              rows={2}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                         text-text-primary resize-none"
-              placeholder="Descripción opcional del producto"
-            />
           </div>
 
           {error && (
-            <div className="bg-danger-soft border border-danger/20 text-danger text-sm rounded-lg px-3 py-2">
+            <div
+              className="bg-danger-soft border border-danger/20 text-danger text-sm
+                    rounded-lg px-3 py-2 mt-4"
+            >
               {error}
             </div>
           )}
 
           {/* Acciones */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-4 mt-2 border-t border-border">
             <button
               type="button"
               onClick={onClose}
               className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm
-                         font-medium text-text-secondary hover:bg-hover transition-colors"
+                 font-medium text-text-secondary hover:bg-hover transition-colors"
             >
               Cancelar
             </button>
@@ -690,8 +830,8 @@ export function ProductoModal({
               type="submit"
               disabled={loading}
               className="flex-1 px-4 py-2.5 bg-accent text-white rounded-lg text-sm
-                         font-medium hover:bg-accent-hover transition-colors
-                         disabled:opacity-50 disabled:cursor-not-allowed"
+                 font-medium hover:bg-accent-hover transition-colors
+                 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading
                 ? "Guardando..."

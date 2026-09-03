@@ -18,3 +18,10 @@ export function formatDate(date: string): string {
     timeStyle: 'short',
   }).format(new Date(date))
 }
+
+export function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
