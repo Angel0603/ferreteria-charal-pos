@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
+import { normalizar } from "@/lib/utils";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type LineaEntrada = { producto: Producto; cantidad: number; costo: number };
@@ -43,15 +44,16 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
     const desde = paginaActualStock * POR_PAGINA_STOCK;
     return stockBajo.slice(desde, desde + POR_PAGINA_STOCK);
   }, [stockBajo, paginaActualStock]);
+
   const resultados = useMemo(() => {
     if (!busqueda.trim()) return [];
-    const q = busqueda.toLowerCase();
+    const q = normalizar(busqueda);
     return productos
       .filter(
         (p) =>
-          p.nombre.toLowerCase().includes(q) ||
-          p.codigo_barras?.includes(q) ||
-          p.sku?.toLowerCase().includes(q),
+          normalizar(p.nombre).includes(q) ||
+          (p.codigo_barras ?? "").includes(busqueda) ||
+          normalizar(p.sku ?? "").includes(q),
       )
       .slice(0, 6);
   }, [busqueda, productos]);
@@ -217,7 +219,7 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto por nombre, SKU o código..."
+            placeholder="Buscar producto por nombre, SKU o código de barras..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"

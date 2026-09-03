@@ -16,6 +16,7 @@ import { ProveedorModal } from "@/components/proveedores/ProveedorModal";
 import { ProveedoresSkeleton } from "@/components/ui/skeletons/ProveedoresSkeleton";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
+import { normalizar } from "@/lib/utils";
 
 type Proveedor = Database["public"]["Tables"]["proveedores"]["Row"];
 
@@ -87,16 +88,16 @@ export default function ProveedoresPage() {
   }
 
   const filtrados = useMemo(
-    () =>
-      proveedores.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-          p.contacto?.toLowerCase().includes(busqueda.toLowerCase()) ||
-          p.telefono?.includes(busqueda) ||
-          p.email?.toLowerCase().includes(busqueda.toLowerCase()),
-      ),
-    [proveedores, busqueda],
-  );
+  () =>
+    proveedores.filter(
+      (p) =>
+        normalizar(p.nombre).includes(normalizar(busqueda)) ||
+        normalizar(p.contacto ?? '').includes(normalizar(busqueda)) ||
+        (p.telefono ?? '').includes(busqueda) ||
+        normalizar(p.email ?? '').includes(normalizar(busqueda)),
+    ),
+  [proveedores, busqueda],
+)
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas - 1);

@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Search, AlertTriangle, Package, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Search,
+  AlertTriangle,
+  Package,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, normalizar } from "@/lib/utils";
 import Image from "next/image";
 import { InventarioSkeleton } from "../ui/skeletons/InventarioSkeleton";
 
@@ -125,9 +132,9 @@ export function StockActual() {
   const filtrados = useMemo(() => {
     return items.filter((i) => {
       const coincide =
-        i.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        i.sku?.toLowerCase().includes(busqueda.toLowerCase()) ||
-        i.codigo_barras?.includes(busqueda);
+        normalizar(i.nombre).includes(normalizar(busqueda)) ||
+        normalizar(i.sku ?? "").includes(normalizar(busqueda)) ||
+        (i.codigo_barras ?? "").includes(busqueda);
       const alerta = soloAlertas ? i.cantidad <= i.stock_minimo : true;
       return coincide && alerta;
     });
@@ -189,7 +196,7 @@ export function StockActual() {
           <input
             value={busqueda}
             onChange={(e) => handleBusquedaChange(e.target.value)}
-            placeholder="Buscar por nombre, SKU o código de barras..."
+            placeholder="Buscar producto por nombre, SKU o código de barras..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"
@@ -292,7 +299,9 @@ export function StockActual() {
 
             <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-2">
               <p className="text-xs text-text-tertiary">
-                Mostrando {paginaActual * POR_PAGINA + 1}–{Math.min((paginaActual + 1) * POR_PAGINA, filtrados.length)} de {filtrados.length}
+                Mostrando {paginaActual * POR_PAGINA + 1}–
+                {Math.min((paginaActual + 1) * POR_PAGINA, filtrados.length)} de{" "}
+                {filtrados.length}
               </p>
               <div className="flex items-center gap-1.5">
                 <button
@@ -308,7 +317,9 @@ export function StockActual() {
                   {paginaActual + 1} / {totalPaginas}
                 </span>
                 <button
-                  onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+                  onClick={() =>
+                    setPagina((p) => Math.min(totalPaginas - 1, p + 1))
+                  }
                   disabled={paginaActual >= totalPaginas - 1}
                   className="w-7 h-7 rounded-lg border border-border text-text-secondary
                              hover:bg-hover transition-colors disabled:opacity-40

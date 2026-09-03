@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Search, Save, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import {
+  Search,
+  Save,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { normalizar } from "@/lib/utils";
 
 type ItemAjuste = {
   producto_id: string;
   nombre: string;
   sku: string | null;
+  codigo_barras: string | null;
   cantidad_actual: number;
   cantidad_nueva: number | "";
   editando: boolean;
@@ -17,14 +25,8 @@ type InventarioRow = {
   cantidad: number;
   producto_id: string;
   productos:
-    | {
-        nombre: string;
-        sku: string | null;
-      }
-    | {
-        nombre: string;
-        sku: string | null;
-      }[];
+    | { nombre: string; sku: string | null; codigo_barras: string | null }
+    | { nombre: string; sku: string | null; codigo_barras: string | null }[];
 };
 
 export function AjusteInventario({ onExito }: { onExito: () => void }) {
@@ -36,6 +38,23 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
   const [cajeroId, setCajeroId] = useState("");
   const [notas, setNotas] = useState("");
   const supabaseRef = useRef(createClient());
+  const [pagina, setPagina] = useState(0);
+  const POR_PAGINA = 10;
+
+  const filtrados = items.filter(
+    (i) =>
+      normalizar(i.nombre).includes(normalizar(busqueda)) ||
+      normalizar(i.sku ?? "").includes(normalizar(busqueda)) ||
+      (i.codigo_barras ?? "").includes(busqueda),
+  );
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas - 1);
+
+  const paginados = useMemo(() => {
+    const desde = paginaActual * POR_PAGINA;
+    return filtrados.slice(desde, desde + POR_PAGINA);
+  }, [filtrados, paginaActual]);
 
   useEffect(() => {
     let activo = true;
@@ -58,7 +77,7 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
 
       const { data } = await supabase
         .from("inventario")
-        .select("cantidad, producto_id, productos(nombre, sku)")
+        .select("cantidad, producto_id, productos(nombre, sku, codigo_barras)")
         .eq("sucursal_id", perfil.sucursal_id)
         .order("productos(nombre)");
 
@@ -72,6 +91,7 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
               producto_id: i.producto_id,
               nombre: prod.nombre,
               sku: prod.sku,
+              codigo_barras: prod.codigo_barras,
               cantidad_actual: i.cantidad,
               cantidad_nueva: "",
               editando: false,
@@ -86,12 +106,6 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
       activo = false;
     };
   }, []);
-
-  const filtrados = items.filter(
-    (i) =>
-      i.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      i.sku?.toLowerCase().includes(busqueda.toLowerCase()),
-  );
 
   const conCambios = items.filter(
     (i) => i.cantidad_nueva !== "" && i.cantidad_nueva !== i.cantidad_actual,
@@ -152,8 +166,10 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 bg-surface border border-border
-                      border-l-[3px] border-l-warning rounded-xl px-4 py-3">
+      <div
+        className="flex items-center gap-3 bg-surface border border-border
+                      border-l-[3px] border-l-warning rounded-xl px-4 py-3"
+      >
         <AlertTriangle size={16} className="text-warning shrink-0" />
         <p className="text-sm text-text-primary">
           <span className="font-medium">Ajuste manual:</span> modifica la
@@ -170,11 +186,14 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
           />
           <input
             value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto..."
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setPagina(0);
+            }}
+            placeholder="Buscar producto por nombre, SKU o código de barras..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
-                       focus:outline-none focus:ring-2 focus:ring-accent bg-surface
-                       text-text-primary placeholder:text-text-tertiary"
+             focus:outline-none focus:ring-2 focus:ring-accent bg-surface
+             text-text-primary placeholder:text-text-tertiary"
           />
         </div>
         {conCambios.length > 0 && (
@@ -217,7 +236,7 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtrados.map((item) => {
+              {paginados.map((item) => {
                 const nueva =
                   item.cantidad_nueva === ""
                     ? null
@@ -238,7 +257,9 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
                         {item.nombre}
                       </p>
                       {item.sku && (
-                        <p className="text-xs text-text-tertiary font-mono">{item.sku}</p>
+                        <p className="text-xs text-text-tertiary font-mono">
+                          {item.sku}
+                        </p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -279,6 +300,38 @@ export function AjusteInventario({ onExito }: { onExito: () => void }) {
             </tbody>
           </table>
         )}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-2">
+          <p className="text-xs text-text-tertiary">
+            Mostrando {paginaActual * POR_PAGINA + 1}–
+            {Math.min((paginaActual + 1) * POR_PAGINA, filtrados.length)} de{" "}
+            {filtrados.length}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setPagina((p) => Math.max(0, p - 1))}
+              disabled={paginaActual === 0}
+              className="w-7 h-7 rounded-lg border border-border text-text-secondary
+                 hover:bg-hover transition-colors disabled:opacity-40
+                 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs text-text-secondary px-2 font-mono">
+              {paginaActual + 1} / {totalPaginas}
+            </span>
+            <button
+              onClick={() =>
+                setPagina((p) => Math.min(totalPaginas - 1, p + 1))
+              }
+              disabled={paginaActual >= totalPaginas - 1}
+              className="w-7 h-7 rounded-lg border border-border text-text-secondary
+                 hover:bg-hover transition-colors disabled:opacity-40
+                 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {conCambios.length > 0 && (

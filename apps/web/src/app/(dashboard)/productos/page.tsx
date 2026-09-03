@@ -126,7 +126,7 @@ export default function ProductosPage() {
             onChange={(e) =>
               setFiltros((f) => ({ ...f, busqueda: e.target.value }))
             }
-            placeholder="Buscar por nombre..."
+            placeholder="Buscar producto por nombre, SKU o código de barras..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"

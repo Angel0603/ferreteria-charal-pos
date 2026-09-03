@@ -116,6 +116,34 @@ export default function PosPage() {
     onCancelar: () => carrito.limpiarCarrito(),
   });
 
+  const autoAgregadoRef = useRef(false);
+  const carritoRef = useRef(carrito);
+  const buscadorRef = useRef(buscador);
+  
+  useEffect(() => {
+    const resultado = buscadorRef.current.resultados[0];
+    const query = buscadorRef.current.query.trim();
+
+    if (
+      buscadorRef.current.resultados.length === 1 &&
+      query !== "" &&
+      resultado.codigo_barras === query &&
+      !autoAgregadoRef.current
+    ) {
+      autoAgregadoRef.current = true;
+      carritoRef.current.agregarProducto(resultado);
+
+      const timer = setTimeout(() => {
+        buscadorRef.current.setQuery("");
+        autoAgregadoRef.current = false;
+      }, 0);
+
+      return () => clearTimeout(timer);
+    } else {
+      autoAgregadoRef.current = false;
+    }
+  }, [buscador.resultados]);
+
   function handleProductoClick(producto: Producto) {
     carrito.agregarProducto(producto);
   }
@@ -213,7 +241,7 @@ export default function PosPage() {
               ref={searchRef}
               value={buscador.query}
               onChange={(e) => buscador.setQuery(e.target.value)}
-              placeholder="Buscar producto o escanear código de barras..."
+              placeholder="Buscar producto con stock disponible por nombre, SKU o código de barras..."
               className="w-full pl-9 pr-24 py-2.5 border border-border rounded-xl text-sm
                focus:outline-none focus:ring-2 focus:ring-accent bg-surface-2
                text-text-primary placeholder:text-text-tertiary"

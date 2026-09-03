@@ -11,7 +11,7 @@ export type Producto = Database['public']['Tables']['productos']['Row'] & {
 export type Categoria = Database['public']['Tables']['categorias']['Row']
 
 type Filtros = {
-  busqueda: string
+  busqueda:    string
   categoriaId: string
   soloActivos: boolean
 }
@@ -19,17 +19,17 @@ type Filtros = {
 const POR_PAGINA = 10
 
 export function useProductos() {
-  const [productos, setProductos] = useState<Producto[]>([])
-  const [categorias, setCategorias] = useState<Categoria[]>([])
-  const [loading, setLoading] = useState(true)
-  const [pagina, setPagina] = useState(0)
-  const [totalRegistros, setTotalRegistros] = useState(0)
+  const [productos,       setProductos]       = useState<Producto[]>([])
+  const [categorias,      setCategorias]      = useState<Categoria[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [cargaInicial,    setCargaInicial]    = useState(true)
+  const [pagina,          setPagina]          = useState(0)
+  const [totalRegistros,  setTotalRegistros]  = useState(0)
   const [filtrosInternos, setFiltrosInternos] = useState<Filtros>({
-    busqueda: '',
+    busqueda:    '',
     categoriaId: '',
     soloActivos: true,
   })
-  const [cargaInicial, setCargaInicial] = useState(true)
 
   const supabaseRef = useRef(createClient())
 
@@ -61,25 +61,47 @@ export function useProductos() {
     async function cargarProductos() {
       setLoading(true)
 
-      const desde = pagina * POR_PAGINA
-      const hasta = desde + POR_PAGINA - 1
+      try {
+        if (filtrosInternos.busqueda) {
+          // Con búsqueda: usar RPC con unaccent, paginar en cliente
+          const { data } = await supabase
+            .rpc('buscar_productos_nombre', {
+              p_query:        filtrosInternos.busqueda.trim(),
+              p_categoria_id: filtrosInternos.categoriaId || null,
+              p_solo_activos: filtrosInternos.soloActivos,
+            })
 
-      let query = supabase
-        .from('productos')
-        .select('*, categorias(nombre)', { count: 'exact' })
-        .order('nombre')
-        .range(desde, hasta)
+          if (activo && data) {
+            const todos = data as unknown as Producto[]
+            setTotalRegistros(todos.length)
+            const desde = pagina * POR_PAGINA
+            setProductos(todos.slice(desde, desde + POR_PAGINA))
+          }
+        } else {
+          // Sin búsqueda: query normal con paginación real en Supabase
+          const desde = pagina * POR_PAGINA
+          const hasta = desde + POR_PAGINA - 1
 
-      if (filtrosInternos.soloActivos) query = query.eq('activo', true)
-      if (filtrosInternos.categoriaId) query = query.eq('categoria_id', filtrosInternos.categoriaId)
-      if (filtrosInternos.busqueda) query = query.ilike('nombre', `%${filtrosInternos.busqueda}%`)
+          let query = supabase
+            .from('productos')
+            .select('*, categorias(nombre)', { count: 'exact' })
+            .order('nombre')
+            .range(desde, hasta)
 
-      const { data, count } = await query
-      if (activo) {
-        if (data) setProductos(data as Producto[])
-        setTotalRegistros(count ?? 0)
-        setLoading(false)
-        setCargaInicial(false)
+          if (filtrosInternos.soloActivos) query = query.eq('activo', true)
+          if (filtrosInternos.categoriaId) query = query.eq('categoria_id', filtrosInternos.categoriaId)
+
+          const { data, count } = await query
+          if (activo) {
+            if (data) setProductos(data as Producto[])
+            setTotalRegistros(count ?? 0)
+          }
+        }
+      } finally {
+        if (activo) {
+          setLoading(false)
+          setCargaInicial(false)
+        }
       }
     }
 

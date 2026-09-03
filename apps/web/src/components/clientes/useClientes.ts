@@ -66,9 +66,19 @@ export function useClientes() {
         .range(desde, hasta)
 
       if (busquedaActiva) {
-        query = query.or(
-          `nombre.ilike.%${busquedaActiva}%,telefono.ilike.%${busquedaActiva}%`
-        )
+        const { data, count } = await supabase
+          .rpc('buscar_clientes_nombre', {
+            p_sucursal_id: perfil.sucursal_id,
+            p_query: busquedaActiva,
+          }, { count: 'exact' })
+          .range(desde, hasta)
+
+        if (activo) {
+          if (data) setClientes(data)
+          setTotalRegistros(count ?? 0)
+          setLoading(false)
+        }
+        return
       }
 
       if (soloConCreditoInterno) query = query.gt('saldo_credito', 0)
