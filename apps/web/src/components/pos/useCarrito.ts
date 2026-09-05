@@ -4,14 +4,14 @@ import { useState, useCallback } from 'react'
 import type { Database } from '@repo/types'
 
 type Producto = Database['public']['Tables']['productos']['Row']
-type Cliente  = Database['public']['Tables']['clientes']['Row']
+type Cliente = Database['public']['Tables']['clientes']['Row']
 
 export type ItemCarrito = {
-  producto:        Producto
-  cantidad:        number
+  producto: Producto
+  cantidad: number
   precio_unitario: number
-  descuento:       number
-  esVario:         boolean
+  descuento: number
+  esVario: boolean
 }
 
 export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto' | 'credito'
@@ -19,10 +19,10 @@ export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto' | 'c
 let contadorVarios = 0
 
 export function useCarrito() {
-  const [items,       setItems]       = useState<ItemCarrito[]>([])
-  const [metodoPago,  setMetodoPago]  = useState<MetodoPago>('efectivo')
-  const [descuento,   setDescuento]   = useState(0)
-  const [cliente,     setCliente]     = useState<Cliente | null>(null)
+  const [items, setItems] = useState<ItemCarrito[]>([])
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
+  const [descuento, setDescuento] = useState(0)
+  const [cliente, setCliente] = useState<Cliente | null>(null)
 
   const agregarProducto = useCallback((producto: Producto) => {
     setItems(prev => {
@@ -36,41 +36,54 @@ export function useCarrito() {
       }
       return [...prev, {
         producto,
-        cantidad:        1,
+        cantidad: 1,
         precio_unitario: producto.precio_base,
-        descuento:       0,
-        esVario:         false,
+        descuento: 0,
+        esVario: false,
       }]
     })
   }, [])
 
+  const aplicarDescuentoProducto = useCallback((
+    productoId: string,
+    descuento: number
+  ) => {
+    setItems(prev =>
+      prev.map(i =>
+        i.producto.id === productoId
+          ? { ...i, descuento }
+          : i
+      )
+    )
+  }, [])
+
   const agregarProductoVario = useCallback((
     descripcion: string,
-    precio:      number,
-    cantidad:    number
+    precio: number,
+    cantidad: number
   ) => {
     contadorVarios += 1
     const productoFalso = {
-      id:               `vario-${Date.now()}-${contadorVarios}`,
-      nombre:           descripcion,
-      precio_base:      precio,
-      precio_mayoreo:   null,
-      sku:              null,
-      codigo_barras:    null,
-      imagen_url:       null,
-      categoria_id:     null,
-      stock_minimo:     0,
-      unidad:           'pza',
-      activo:           true,
-      created_at:       null,
+      id: `vario-${Date.now()}-${contadorVarios}`,
+      nombre: descripcion,
+      precio_base: precio,
+      precio_mayoreo: null,
+      sku: null,
+      codigo_barras: null,
+      imagen_url: null,
+      categoria_id: null,
+      stock_minimo: 0,
+      unidad: 'pza',
+      activo: true,
+      created_at: null,
     } as unknown as Producto
 
     setItems(prev => [...prev, {
-      producto:        productoFalso,
+      producto: productoFalso,
       cantidad,
       precio_unitario: precio,
-      descuento:       0,
-      esVario:         true,
+      descuento: 0,
+      esVario: true,
     }])
   }, [])
 
@@ -129,5 +142,6 @@ export function useCarrito() {
     limpiarCarrito,
     asignarCliente,
     actualizarSaldoCliente,
+    aplicarDescuentoProducto,
   }
 }

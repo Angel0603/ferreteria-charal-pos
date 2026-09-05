@@ -119,7 +119,7 @@ export default function PosPage() {
   const autoAgregadoRef = useRef(false);
   const carritoRef = useRef(carrito);
   const buscadorRef = useRef(buscador);
-  
+
   useEffect(() => {
     const resultado = buscadorRef.current.resultados[0];
     const query = buscadorRef.current.query.trim();
@@ -388,6 +388,7 @@ export default function PosPage() {
           onCobrar={() => setModalCobrar(true)}
           onCliente={() => setModalCliente(true)}
           onDescuento={() => setModalDescuento(true)}
+          onDescuentoProducto={carrito.aplicarDescuentoProducto}
         />
       </div>
 
