@@ -20,52 +20,63 @@ export function useTicket() {
   const imprimir = useCallback(async (termica: boolean) => {
     if (!ticketRef.current) return
 
-    const ventana = window.open('', '_blank')
-    if (!ventana) return
-
     const estilos = termica
       ? `
         body { margin: 0; padding: 0; }
-        @page { size: 80mm auto; margin: 0; }
-        @media print { body { width: 80mm; } }
+        @page { size: 58mm auto; margin: 0; }
+        @media print { body { width: 58mm; } }
+        body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; }
       `
       : `
-        body { margin: 20px; }
-        @page { size: A4; margin: 20mm; }
+        body { margin: 0; padding: 0; }
+        @page { size: A4; margin: 15mm; }
+        body { font-family: Arial, sans-serif; font-size: 13px; color: #000; }
       `
 
-    ventana.document.write(`
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right    = '-9999px'
+    iframe.style.bottom   = '-9999px'
+    iframe.style.width    = '0'
+    iframe.style.height   = '0'
+    iframe.style.border   = 'none'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentWindow?.document
+    if (!doc) return
+
+    doc.open()
+    doc.write(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Ticket ${new Date().toISOString()}</title>
-          <style>
-            ${estilos}
-            body { font-family: monospace; font-size: 12px; color: #000; }
-          </style>
+          <title>Ticket</title>
+          <style>${estilos}</style>
         </head>
-        <body>
-          ${ticketRef.current.innerHTML}
-        </body>
+        <body>${ticketRef.current.innerHTML}</body>
       </html>
     `)
-    ventana.document.close()
-    ventana.focus()
-    setTimeout(() => {
-      ventana.print()
-      ventana.close()
-    }, 500)
+    doc.close()
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+        setTimeout(() => document.body.removeChild(iframe), 1000)
+      }, 300)
+    }
   }, [])
 
   const descargarPDF = useCallback(async (folio: string) => {
     const canvas = await capturarCanvas()
     const imgData = canvas.toDataURL('image/png')
 
-    const pdf    = new jsPDF('p', 'mm', 'a4')
-    const pdfW   = pdf.internal.pageSize.getWidth()
-    const ratio  = canvas.height / canvas.width
-    const imgW   = pdfW * 0.6
-    const imgH   = imgW * ratio
-    const x      = (pdfW - imgW) / 2
+    const pdf   = new jsPDF('p', 'mm', 'a4')
+    const pdfW  = pdf.internal.pageSize.getWidth()
+    const ratio = canvas.height / canvas.width
+    const imgW  = pdfW * 0.6
+    const imgH  = imgW * ratio
+    const x     = (pdfW - imgW) / 2
 
     pdf.addImage(imgData, 'PNG', x, 20, imgW, imgH)
     pdf.save(`ticket-${folio}.pdf`)
@@ -80,9 +91,9 @@ export function useTicket() {
   }, [capturarCanvas])
 
   const compartirWhatsApp = useCallback(async (
-    folio:   string,
-    total:   number,
-    tipo:    'imagen' | 'pdf'
+    folio: string,
+    total: number,
+    tipo:  'imagen' | 'pdf'
   ) => {
     try {
       if (tipo === 'imagen') {
@@ -93,11 +104,10 @@ export function useTicket() {
 
           if (navigator.canShare?.({ files: [file] })) {
             await navigator.share({
-              files:  [file],
-              title:  `Ticket ${folio}`,
+              files: [file],
+              title: `Ticket ${folio}`,
             })
           } else {
-            // Fallback: abrir WhatsApp con mensaje de texto
             const mensaje = encodeURIComponent(
               `🧾 *Ticket ${folio}*\nTotal: $${total.toFixed(2)}\n\nGracias por su compra.`
             )
