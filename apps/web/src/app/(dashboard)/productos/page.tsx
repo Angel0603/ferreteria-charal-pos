@@ -258,8 +258,10 @@ export default function ProductosPage() {
               </tr>
             </thead>
             <tbody
-              className={`divide-y divide-border transition-opacity duration-150 ${
-                loading ? "opacity-40 pointer-events-none" : "opacity-100"
+              className={`divide-y divide-border transition-all duration-300 ease-in-out ${
+                loading
+                  ? "opacity-0 -translate-y-1"
+                  : "opacity-100 translate-y-0"
               }`}
             >
               {productos.map((producto) => (

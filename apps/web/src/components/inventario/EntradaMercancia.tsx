@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState, useMemo } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -11,7 +12,6 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
-import { normalizar } from "@/lib/utils";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type LineaEntrada = { producto: Producto; cantidad: number; costo: number };
@@ -20,47 +20,30 @@ type StockBajo = {
   nombre: string;
   cantidad: number;
   stock_minimo: number;
-  faltante: number;
 };
+
+const POR_PAGINA_STOCK = 10;
+
 export function EntradaMercancia({ onExito }: { onExito: () => void }) {
-  const [productos, setProductos] = useState<Producto[]>([]);
   const [lineas, setLineas] = useState<LineaEntrada[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [resultados, setResultados] = useState<Producto[]>([]);
+  const [buscando, setBuscando] = useState(false);
   const [notas, setNotas] = useState("");
   const [loading, setLoading] = useState(false);
   const [sucursalId, setSucursalId] = useState("");
   const [cajeroId, setCajeroId] = useState("");
+
   const [stockBajo, setStockBajo] = useState<StockBajo[]>([]);
-  const supabaseRef = useRef(createClient());
+  const [totalAlertas, setTotalAlertas] = useState(0);
   const [paginaStockBajo, setPaginaStockBajo] = useState(0);
-  const POR_PAGINA_STOCK = 10;
-  const totalPaginasStock = Math.max(
-    1,
-    Math.ceil(stockBajo.length / POR_PAGINA_STOCK),
-  );
-  const paginaActualStock = Math.min(paginaStockBajo, totalPaginasStock - 1);
+  const [loadingStockBajo, setLoadingStockBajo] = useState(true);
 
-  const stockBajoPaginado = useMemo(() => {
-    const desde = paginaActualStock * POR_PAGINA_STOCK;
-    return stockBajo.slice(desde, desde + POR_PAGINA_STOCK);
-  }, [stockBajo, paginaActualStock]);
+  const supabaseRef = useRef(createClient());
 
-  const resultados = useMemo(() => {
-    if (!busqueda.trim()) return [];
-    const q = normalizar(busqueda);
-    return productos
-      .filter(
-        (p) =>
-          normalizar(p.nombre).includes(q) ||
-          (p.codigo_barras ?? "").includes(busqueda) ||
-          normalizar(p.sku ?? "").includes(q),
-      )
-      .slice(0, 6);
-  }, [busqueda, productos]);
-
+  // Datos del usuario y sucursal
   useEffect(() => {
     let activo = true;
-
     async function cargar() {
       const supabase = supabaseRef.current;
       const {
@@ -77,63 +60,90 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
 
       if (!perfil?.sucursal_id) return;
       if (activo) setSucursalId(perfil.sucursal_id);
-
-      const { data } = await supabase
-        .from("productos")
-        .select("*")
-        .eq("activo", true)
-        .order("nombre");
-      if (activo && data) setProductos(data);
-
-      const { data: invData } = await supabase
-        .from("inventario")
-        .select(
-          `
-        cantidad,
-        producto_id,
-        productos(nombre, stock_minimo)
-      `,
-        )
-        .eq("sucursal_id", perfil.sucursal_id);
-
-      if (activo && invData) {
-        const bajos = (
-          invData as unknown as {
-            cantidad: number;
-            producto_id: string;
-            productos:
-              | { nombre: string; stock_minimo: number }
-              | { nombre: string; stock_minimo: number }[];
-          }[]
-        )
-          .filter((i) => {
-            const prod = Array.isArray(i.productos)
-              ? i.productos[0]
-              : i.productos;
-            return i.cantidad <= prod.stock_minimo;
-          })
-          .map((i) => {
-            const prod = Array.isArray(i.productos)
-              ? i.productos[0]
-              : i.productos;
-            return {
-              producto_id: i.producto_id,
-              nombre: prod.nombre,
-              cantidad: i.cantidad,
-              stock_minimo: prod.stock_minimo,
-              faltante: prod.stock_minimo - i.cantidad,
-            };
-          })
-          .sort((a, b) => a.cantidad - b.cantidad);
-        setStockBajo(bajos);
-      }
     }
-
     cargar();
     return () => {
       activo = false;
     };
   }, []);
+
+  // Búsqueda de productos con debounce (servidor)
+  useEffect(() => {
+    if (!busqueda.trim()) {
+      const timer = setTimeout(() => setResultados([]), 0);
+      return () => clearTimeout(timer);
+    }
+    let activo = true;
+
+    const timer = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabaseRef.current.rpc(
+        "buscar_productos_nombre",
+        {
+          p_query: busqueda.trim(),
+          p_categoria_id: null,
+          p_solo_activos: true,
+        },
+      );
+      if (activo) {
+        setResultados(((data ?? []) as unknown as Producto[]).slice(0, 6));
+        setBuscando(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      activo = false;
+    };
+  }, [busqueda]);
+
+  // Stock bajo paginado (servidor)
+  useEffect(() => {
+    if (!sucursalId) return;
+    let activo = true;
+
+    async function cargarStockBajo() {
+      setLoadingStockBajo(true);
+      const supabase = supabaseRef.current;
+      const desde = paginaStockBajo * POR_PAGINA_STOCK;
+      const hasta = desde + POR_PAGINA_STOCK - 1;
+
+      const { data } = await supabase
+        .rpc("buscar_stock_actual", {
+          p_sucursal_id: sucursalId,
+          p_query: "",
+          p_solo_alertas: true,
+        })
+        .range(desde, hasta);
+
+      const { data: totalData } = await supabase.rpc("contar_alertas_stock", {
+        p_sucursal_id: sucursalId,
+      });
+
+      if (activo) {
+        setStockBajo(
+          (data ?? []) as unknown as {
+            producto_id: string;
+            nombre: string;
+            cantidad: number;
+            stock_minimo: number;
+          }[],
+        );
+        if (typeof totalData === "number") setTotalAlertas(totalData);
+        setLoadingStockBajo(false);
+      }
+    }
+
+    cargarStockBajo();
+    return () => {
+      activo = false;
+    };
+  }, [sucursalId, paginaStockBajo]);
+
+  const totalPaginasStock = Math.max(
+    1,
+    Math.ceil(totalAlertas / POR_PAGINA_STOCK),
+  );
 
   function agregarLinea(producto: Producto) {
     if (lineas.find((l) => l.producto.id === producto.id)) {
@@ -142,6 +152,7 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
     }
     setLineas((prev) => [...prev, { producto, cantidad: 1, costo: 0 }]);
     setBusqueda("");
+    setResultados([]);
   }
 
   function actualizarLinea(
@@ -156,6 +167,15 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
 
   function eliminarLinea(id: string) {
     setLineas((prev) => prev.filter((l) => l.producto.id !== id));
+  }
+
+  async function agregarLineaPorId(productoId: string) {
+    const { data } = await supabaseRef.current
+      .from("productos")
+      .select("*")
+      .eq("id", productoId)
+      .single();
+    if (data) agregarLinea(data as Producto);
   }
 
   async function handleGuardar() {
@@ -194,6 +214,7 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
       });
       setLineas([]);
       setNotas("");
+      setPaginaStockBajo(0);
       onExito();
     } catch (err) {
       toast.error("Error al registrar la entrada", {
@@ -219,36 +240,46 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto por nombre, SKU o código de barras..."
+            placeholder="Buscar producto por nombre, SKU o código..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"
           />
-          {resultados.length > 0 && (
+          {busqueda.trim() && (
             <div
               className="absolute top-full left-0 right-0 mt-1 bg-surface border
                             border-border rounded-xl shadow-lg z-10 overflow-hidden"
             >
-              {resultados.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => agregarLinea(p)}
-                  className="w-full flex items-center justify-between px-4 py-2.5
-                             hover:bg-hover transition-colors text-left"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-text-primary">
-                      {p.nombre}
-                    </p>
-                    {p.sku && (
-                      <p className="text-xs text-text-tertiary font-mono">
-                        {p.sku}
+              {buscando ? (
+                <div className="px-4 py-3 text-sm text-text-tertiary">
+                  Buscando...
+                </div>
+              ) : resultados.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-text-tertiary">
+                  Sin resultados
+                </div>
+              ) : (
+                resultados.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => agregarLinea(p)}
+                    className="w-full flex items-center justify-between px-4 py-2.5
+                               hover:bg-hover transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">
+                        {p.nombre}
                       </p>
-                    )}
-                  </div>
-                  <Plus size={15} className="text-text-tertiary shrink-0" />
-                </button>
-              ))}
+                      {p.sku && (
+                        <p className="text-xs text-text-tertiary font-mono">
+                          {p.sku}
+                        </p>
+                      )}
+                    </div>
+                    <Plus size={15} className="text-text-tertiary shrink-0" />
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -344,23 +375,18 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
           </div>
         </div>
       )}
+
       {/* Productos con stock bajo */}
-      {stockBajo.length > 0 && (
+      {totalAlertas > 0 && (
         <div className="bg-surface rounded-xl border border-border overflow-hidden">
-          <div
-            className="flex items-center gap-3 px-4 py-3 border-b border-border
-                    border-l-[3px] border-l-warning"
-          >
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border border-l-[3px] border-l-warning">
             <AlertTriangle size={16} className="text-warning shrink-0" />
             <p className="text-sm text-text-primary">
               <span className="font-medium">
-                {stockBajo.length} producto{stockBajo.length !== 1 ? "s" : ""}
+                {totalAlertas} producto{totalAlertas !== 1 ? "s" : ""}
               </span>{" "}
               por surtir
             </p>
-            <span className="ml-auto text-xs text-text-tertiary">
-              Haz clic para agregar
-            </span>
           </div>
           <table className="w-full">
             <thead>
@@ -380,17 +406,26 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
                 <th className="px-4 py-2 w-10" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {stockBajoPaginado.map((item) => {
+            <tbody
+              className={`divide-y divide-border transition-opacity duration-150 ${
+                loadingStockBajo ? "opacity-40" : "opacity-100"
+              }`}
+            >
+              {stockBajo.map((item) => {
                 const yaAgregado = lineas.some(
                   (l) => l.producto.id === item.producto_id,
                 );
+                const enAlerta =
+                  item.cantidad < item.stock_minimo || item.cantidad === 0;
+                const faltante = enAlerta
+                  ? item.stock_minimo - item.cantidad
+                  : 0;
                 return (
                   <tr
                     key={item.producto_id}
-                    className={`transition-colors ${
+                    className={
                       yaAgregado ? "bg-success-soft/50" : "hover:bg-hover"
-                    }`}
+                    }
                   >
                     <td className="px-4 py-2.5">
                       <p className="text-sm font-medium text-text-primary">
@@ -411,7 +446,7 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className="text-sm font-semibold text-danger font-mono">
-                        +{item.faltante}
+                        +{faltante}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
@@ -421,15 +456,10 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
                         </span>
                       ) : (
                         <button
-                          onClick={() => {
-                            const prod = productos.find(
-                              (p) => p.id === item.producto_id,
-                            );
-                            if (prod) agregarLinea(prod);
-                          }}
+                          onClick={() => agregarLineaPorId(item.producto_id)}
                           className="text-xs text-text-secondary hover:text-text-primary
-                         border border-border rounded-lg px-2 py-1
-                         hover:bg-hover transition-colors whitespace-nowrap"
+                                     border border-border rounded-lg px-2 py-1
+                                     hover:bg-hover transition-colors whitespace-nowrap"
                         >
                           + Agregar
                         </button>
@@ -441,29 +471,28 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
             </tbody>
           </table>
 
-          {/* Footer paginación */}
-          {stockBajo.length > POR_PAGINA_STOCK && (
+          {totalAlertas > POR_PAGINA_STOCK && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface-2">
               <p className="text-xs text-text-tertiary">
-                Mostrando {paginaActualStock * POR_PAGINA_STOCK + 1}–
+                Mostrando {paginaStockBajo * POR_PAGINA_STOCK + 1}–
                 {Math.min(
-                  (paginaActualStock + 1) * POR_PAGINA_STOCK,
-                  stockBajo.length,
+                  (paginaStockBajo + 1) * POR_PAGINA_STOCK,
+                  totalAlertas,
                 )}{" "}
-                de {stockBajo.length}
+                de {totalAlertas}
               </p>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setPaginaStockBajo((p) => Math.max(0, p - 1))}
-                  disabled={paginaActualStock === 0}
+                  disabled={paginaStockBajo === 0}
                   className="w-7 h-7 rounded-lg border border-border text-text-secondary
-                       hover:bg-hover transition-colors disabled:opacity-40
-                       disabled:cursor-not-allowed flex items-center justify-center"
+                             hover:bg-hover transition-colors disabled:opacity-40
+                             disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   <ChevronLeft size={14} />
                 </button>
                 <span className="text-xs text-text-secondary px-2 font-mono">
-                  {paginaActualStock + 1} / {totalPaginasStock}
+                  {paginaStockBajo + 1} / {totalPaginasStock}
                 </span>
                 <button
                   onClick={() =>
@@ -471,10 +500,10 @@ export function EntradaMercancia({ onExito }: { onExito: () => void }) {
                       Math.min(totalPaginasStock - 1, p + 1),
                     )
                   }
-                  disabled={paginaActualStock >= totalPaginasStock - 1}
+                  disabled={paginaStockBajo >= totalPaginasStock - 1}
                   className="w-7 h-7 rounded-lg border border-border text-text-secondary
-                       hover:bg-hover transition-colors disabled:opacity-40
-                       disabled:cursor-not-allowed flex items-center justify-center"
+                             hover:bg-hover transition-colors disabled:opacity-40
+                             disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   <ChevronRight size={14} />
                 </button>

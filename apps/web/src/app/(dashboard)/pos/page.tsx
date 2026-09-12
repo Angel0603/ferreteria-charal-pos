@@ -342,6 +342,7 @@ export default function PosPage() {
                              transition-all flex flex-col gap-2"
                 >
                   <div
+                    title={producto.nombre}
                     className="w-full aspect-square rounded-lg bg-surface-2 overflow-hidden
                                   flex items-center justify-center relative border border-border"
                   >
@@ -358,7 +359,7 @@ export default function PosPage() {
                     )}
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-text-primary line-clamp-2 leading-tight">
+                    <p className="text-xs font-medium text-text-primary line-clamp-2 leading-tight truncate">
                       {producto.nombre}
                     </p>
                     <p className="text-xs text-text-secondary mt-0.5">

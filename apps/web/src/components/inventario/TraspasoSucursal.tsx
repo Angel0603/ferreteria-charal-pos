@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   Plus,
@@ -13,24 +13,15 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@repo/types";
 import { ModalSucursal } from "./ModalSucursal";
-import { normalizar } from "@/lib/utils";
 
 type Sucursal = Database["public"]["Tables"]["sucursales"]["Row"];
 
-type ProductoStock = {
-  cantidad: number;
+type ProductoStockResultado = {
   producto_id: string;
-  productos:
-    | {
-        nombre: string;
-        sku: string | null;
-        codigo_barras: string | null;
-      }
-    | {
-        nombre: string;
-        sku: string | null;
-        codigo_barras: string | null;
-      }[];
+  nombre: string;
+  sku: string | null;
+  codigo_barras: string | null;
+  cantidad: number;
 };
 
 type LineaTraspaso = {
@@ -44,9 +35,10 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sucursalOrigen, setSucursalOrigen] = useState("");
   const [sucursalDestino, setSucursalDestino] = useState("");
-  const [productos, setProductos] = useState<ProductoStock[]>([]);
-  const [lineas, setLineas] = useState<LineaTraspaso[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [resultados, setResultados] = useState<ProductoStockResultado[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [lineas, setLineas] = useState<LineaTraspaso[]>([]);
   const [notas, setNotas] = useState("");
   const [loading, setLoading] = useState(false);
   const [cajeroId, setCajeroId] = useState("");
@@ -88,7 +80,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
 
       const { data: perfil } = await supabase
         .from("perfiles")
-        .select("sucursal_id, rol")
+        .select("sucursal_id")
         .eq("id", user.id)
         .single();
 
@@ -107,56 +99,51 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
     };
   }, []);
 
+  // Búsqueda de productos con stock en la sucursal origen (servidor)
   useEffect(() => {
-    if (!sucursalOrigen) return;
-    let activo = true;
-    async function cargarStock() {
-      const { data } = await supabaseRef.current
-        .from("inventario")
-        .select("cantidad, producto_id, productos(nombre, sku, codigo_barras)")
-        .eq("sucursal_id", sucursalOrigen)
-        .gt("cantidad", 0);
-      if (activo && data) setProductos(data as unknown as ProductoStock[]);
+    if (!sucursalOrigen || !busqueda.trim()) {
+      const timer = setTimeout(() => setResultados([]), 0);
+      return () => clearTimeout(timer);
     }
-    cargarStock();
+    let activo = true;
+
+    const timer = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabaseRef.current.rpc(
+        "buscar_productos_traspaso",
+        {
+          p_sucursal_id: sucursalOrigen,
+          p_query: busqueda.trim(),
+        },
+      );
+      if (activo) {
+        setResultados((data ?? []) as ProductoStockResultado[]);
+        setBuscando(false);
+      }
+    }, 300);
+
     return () => {
+      clearTimeout(timer);
       activo = false;
     };
-  }, [sucursalOrigen]);
+  }, [busqueda, sucursalOrigen]);
 
-  const resultados = useMemo(() => {
-    if (!busqueda.trim()) return [];
-    const q = normalizar(busqueda);
-    return productos
-      .filter((p) => {
-        const prod = Array.isArray(p.productos) ? p.productos[0] : p.productos;
-        return (
-          normalizar(prod.nombre).includes(q) ||
-          normalizar(prod.sku ?? "").includes(q) ||
-          (prod.codigo_barras ?? "").includes(busqueda)
-        );
-      })
-      .slice(0, 6);
-  }, [busqueda, productos]);
-
-  function agregarLinea(item: ProductoStock) {
+  function agregarLinea(item: ProductoStockResultado) {
     if (lineas.find((l) => l.producto_id === item.producto_id)) {
       toast.warning("Este producto ya está en la lista");
       return;
     }
-    const prod = Array.isArray(item.productos)
-      ? item.productos[0]
-      : item.productos;
     setLineas((prev) => [
       ...prev,
       {
         producto_id: item.producto_id,
-        nombre: prod.nombre,
+        nombre: item.nombre,
         disponible: item.cantidad,
         cantidad: 1,
       },
     ]);
     setBusqueda("");
+    setResultados([]);
   }
 
   function handleSucursalCreada(sucursal: Sucursal) {
@@ -258,7 +245,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
             type="button"
             onClick={() => setModalSucursal(true)}
             className="flex items-center gap-2 bg-accent text-white text-sm
-                 font-medium px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
+                       font-medium px-4 py-2 rounded-lg hover:bg-accent-hover transition-colors"
           >
             <Plus size={15} />
             Nueva sucursal
@@ -271,14 +258,13 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
               <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wide">
                 Sucursal origen
               </label>
-
               <div className="relative" ref={dropdownOrigenRef}>
                 <button
                   type="button"
                   onClick={() => setDropdownOrigenAbierto((v) => !v)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2 border
-                 border-border rounded-lg text-sm bg-surface text-text-primary
-                 hover:bg-hover transition-colors"
+                       border-border rounded-lg text-sm bg-surface text-text-primary
+                       hover:bg-hover transition-colors"
                 >
                   {sucursales.find((s) => s.id === sucursalOrigen)?.nombre ??
                     "Seleccionar..."}
@@ -289,15 +275,14 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                     }`}
                   />
                 </button>
-
                 <div
                   className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
-                  border-border rounded-xl shadow-lg z-20 overflow-hidden
-                  origin-top transition-all duration-150 ${
-                    dropdownOrigenAbierto
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-95 pointer-events-none"
-                  }`}
+                        border-border rounded-xl shadow-lg z-20 overflow-hidden
+                        origin-top transition-all duration-150 ${
+                          dropdownOrigenAbierto
+                            ? "opacity-100 scale-100"
+                            : "opacity-0 scale-95 pointer-events-none"
+                        }`}
                 >
                   <div className="py-1 max-h-60 overflow-y-auto">
                     {sucursales.map((s) => (
@@ -307,10 +292,11 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                         onClick={() => {
                           setSucursalOrigen(s.id);
                           setLineas([]);
+                          setBusqueda("");
                           setDropdownOrigenAbierto(false);
                         }}
                         className="w-full flex items-center justify-between gap-2 px-3.5 py-2
-                       text-sm text-text-primary hover:bg-hover transition-colors text-left"
+                             text-sm text-text-primary hover:bg-hover transition-colors text-left"
                       >
                         {s.nombre}
                         {sucursalOrigen === s.id && (
@@ -332,14 +318,13 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
               <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wide">
                 Sucursal destino
               </label>
-
               <div className="relative" ref={dropdownDestinoRef}>
                 <button
                   type="button"
                   onClick={() => setDropdownDestinoAbierto((v) => !v)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2 border
-                 border-border rounded-lg text-sm bg-surface text-text-primary
-                 hover:bg-hover transition-colors"
+                       border-border rounded-lg text-sm bg-surface text-text-primary
+                       hover:bg-hover transition-colors"
                 >
                   <span
                     className={sucursalDestino ? "" : "text-text-secondary"}
@@ -354,15 +339,14 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                     }`}
                   />
                 </button>
-
                 <div
                   className={`absolute top-full left-0 right-0 mt-1.5 bg-surface border
-                  border-border rounded-xl shadow-lg z-20 overflow-hidden
-                  origin-top transition-all duration-150 ${
-                    dropdownDestinoAbierto
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-95 pointer-events-none"
-                  }`}
+                        border-border rounded-xl shadow-lg z-20 overflow-hidden
+                        origin-top transition-all duration-150 ${
+                          dropdownDestinoAbierto
+                            ? "opacity-100 scale-100"
+                            : "opacity-0 scale-95 pointer-events-none"
+                        }`}
                 >
                   <div className="py-1 max-h-60 overflow-y-auto">
                     {sucursales
@@ -376,7 +360,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                             setDropdownDestinoAbierto(false);
                           }}
                           className="w-full flex items-center justify-between gap-2 px-3.5 py-2
-                         text-sm text-text-primary hover:bg-hover transition-colors text-left"
+                               text-sm text-text-primary hover:bg-hover transition-colors text-left"
                         >
                           {s.nombre}
                           {sucursalDestino === s.id && (
@@ -391,6 +375,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
           </div>
         </div>
       </div>
+
       {/* Buscador */}
       <div className="bg-surface rounded-xl border border-border p-4">
         <h2 className="text-sm font-medium text-text-primary mb-3">
@@ -404,21 +389,26 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto con stock disponible por nombre, SKU o código de barras..."
+            placeholder="Buscar producto con stock disponible..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-accent bg-surface
                        text-text-primary placeholder:text-text-tertiary"
           />
-          {resultados.length > 0 && (
+          {busqueda.trim() && (
             <div
               className="absolute top-full left-0 right-0 mt-1 bg-surface border
                             border-border rounded-xl shadow-lg z-10 overflow-hidden"
             >
-              {resultados.map((p) => {
-                const prod = Array.isArray(p.productos)
-                  ? p.productos[0]
-                  : p.productos;
-                return (
+              {buscando ? (
+                <div className="px-4 py-2.5 text-sm text-text-tertiary">
+                  Buscando...
+                </div>
+              ) : resultados.length === 0 ? (
+                <div className="px-4 py-2.5 text-sm text-text-tertiary">
+                  Sin resultados
+                </div>
+              ) : (
+                resultados.map((p) => (
                   <button
                     key={p.producto_id}
                     onClick={() => agregarLinea(p)}
@@ -427,7 +417,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                   >
                     <div>
                       <p className="text-sm font-medium text-text-primary">
-                        {prod.nombre}
+                        {p.nombre}
                       </p>
                       <p className="text-xs text-text-tertiary">
                         Disponible: {p.cantidad}
@@ -435,8 +425,8 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                     </div>
                     <Plus size={15} className="text-text-tertiary shrink-0" />
                   </button>
-                );
-              })}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -485,11 +475,7 @@ export function TraspasoSucursal({ onExito }: { onExito: () => void }) {
                       className={`w-full text-right px-3 py-1.5 border rounded-lg text-sm
                                  focus:outline-none focus:ring-2 focus:ring-accent max-w-24 ml-auto block
                                  bg-surface text-text-primary
-                                 ${
-                                   linea.cantidad > linea.disponible
-                                     ? "border-danger bg-danger-soft"
-                                     : "border-border"
-                                 }`}
+                                 ${linea.cantidad > linea.disponible ? "border-danger bg-danger-soft" : "border-border"}`}
                     />
                   </td>
                   <td className="px-4 py-3">
