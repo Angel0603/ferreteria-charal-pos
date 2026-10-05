@@ -1,5 +1,18 @@
 # 🔧 Ferretería POS
 
+## 🚀 Demo en vivo
+
+Puedes explorar el sistema sin instalar nada:
+
+🔗 **[Ver demo en vivo](https://ferreteria-pos-demo.vercel.app)**
+
+| Campo | Valor |
+|-------|-------|
+| Email | `demo@ferreteria.com` |
+| Contraseña | `Demo1234#` |
+
+> Los datos de la demo se reinician periódicamente.
+
 > Sistema de punto de venta y gestión empresarial para ferreterías con múltiples sucursales.
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-black?style=flat-square&logo=next.js)
