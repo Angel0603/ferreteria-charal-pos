@@ -22,7 +22,7 @@ import type { Database } from "@repo/types";
 import Image from "next/image";
 import { ProductosSkeleton } from "@/components/ui/skeletons/ProductosSkeleton";
 import { toast } from "sonner";
-
+import { usePerfil } from "@/lib/context/PerfilContext";
 type ProductoPage = Database["public"]["Tables"]["productos"]["Row"] & {
   categorias: { nombre: string } | null;
 };
@@ -44,6 +44,8 @@ export default function ProductosPage() {
     agregarCategoriaLocal,
     toggleActivo,
   } = useProductos();
+  const { rol } = usePerfil();
+  const esSoloLectura = rol === "cajero";
   const [modalAbierto, setModalAbierto] = useState(false);
   const [productoEditar, setProductoEditar] = useState<ProductoPage | null>(
     null,
@@ -104,14 +106,16 @@ export default function ProductosPage() {
             {totalRegistros !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={abrirNuevo}
-          className="flex items-center gap-2 bg-accent text-white text-sm
-                     font-medium px-4 py-2.5 rounded-lg hover:bg-accent-hover transition-colors"
-        >
-          <Plus size={16} />
-          Nuevo producto
-        </button>
+        {!esSoloLectura && (
+          <button
+            onClick={abrirNuevo}
+            className="flex items-center gap-2 bg-accent text-white text-sm
+                 font-medium px-4 py-2.5 rounded-lg hover:bg-accent-hover transition-colors"
+          >
+            <Plus size={16} />
+            Nuevo producto
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -222,12 +226,14 @@ export default function ProductosPage() {
           <div className="flex flex-col items-center justify-center py-20 text-text-tertiary">
             <Package size={32} className="mb-3 opacity-40" />
             <p className="text-sm">No hay productos</p>
-            <button
-              onClick={abrirNuevo}
-              className="mt-3 text-sm text-accent font-medium hover:underline"
-            >
-              Crear el primero
-            </button>
+            {!esSoloLectura && (
+              <button
+                onClick={abrirNuevo}
+                className="mt-3 text-sm text-accent font-medium hover:underline"
+              >
+                Crear el primero
+              </button>
+            )}
           </div>
         ) : (
           <table className="w-full">
@@ -332,52 +338,66 @@ export default function ProductosPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className="grid place-content-center">
-                      <button
-                        onClick={() => handleToggleActivo(producto)}
-                        role="switch"
-                        aria-checked={producto.activo}
-                        title={
+                    {esSoloLectura ? (
+                      <span
+                        className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                           producto.activo
-                            ? "Clic para desactivar"
-                            : "Clic para activar"
-                        }
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full
-                  transition-colors shrink-0 ${
-                    producto.activo ? "bg-success" : "bg-danger"
-                  }`}
+                            ? "bg-success-soft text-success"
+                            : "bg-danger-soft text-danger"
+                        }`}
                       >
-                        <span
-                          className={`inline-flex items-center justify-center h-4.5 w-4.5
-                    transform rounded-full bg-white shadow-sm
-                    transition-transform ${
-                      producto.activo ? "translate-x-5.5" : "translate-x-0.75"
-                    }`}
+                        {producto.activo ? "Activo" : "Inactivo"}
+                      </span>
+                    ) : (
+                      <div className="grid place-content-center">
+                        <button
+                          onClick={() => handleToggleActivo(producto)}
+                          role="switch"
+                          aria-checked={producto.activo}
+                          title={
+                            producto.activo
+                              ? "Clic para desactivar"
+                              : "Clic para activar"
+                          }
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full
+          transition-colors shrink-0 ${
+            producto.activo ? "bg-success" : "bg-danger"
+          }`}
                         >
-                          {producto.activo ? (
-                            <Check
-                              size={11}
-                              className="text-success"
-                              strokeWidth={3}
-                            />
-                          ) : (
-                            <X
-                              size={11}
-                              className="text-danger"
-                              strokeWidth={3}
-                            />
-                          )}
-                        </span>
-                      </button>
-                    </div>
+                          <span
+                            className={`inline-flex items-center justify-center h-4.5 w-4.5
+            transform rounded-full bg-white shadow-sm
+            transition-transform ${
+              producto.activo ? "translate-x-5.5" : "translate-x-0.75"
+            }`}
+                          >
+                            {producto.activo ? (
+                              <Check
+                                size={11}
+                                className="text-success"
+                                strokeWidth={3}
+                              />
+                            ) : (
+                              <X
+                                size={11}
+                                className="text-danger"
+                                strokeWidth={3}
+                              />
+                            )}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => abrirEditar(producto)}
-                      className="text-text-tertiary hover:text-text-primary transition-colors p-1"
-                    >
-                      <Pencil size={15} />
-                    </button>
+                    {!esSoloLectura && (
+                      <button
+                        onClick={() => abrirEditar(producto)}
+                        className="text-text-tertiary hover:text-text-primary transition-colors p-1"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -421,7 +441,7 @@ export default function ProductosPage() {
       </div>
 
       {/* Modal */}
-      {modalAbierto && (
+      {modalAbierto && !esSoloLectura && (
         <ProductoModal
           producto={productoEditar}
           categorias={categorias}
