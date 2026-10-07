@@ -1,5 +1,39 @@
 # 🔧 Ferretería POS
 
+## 🚀 Demo en vivo
+
+Puedes explorar el sistema completo sin instalar nada.
+
+> ⚠️ **Los datos de la demo son ficticios y se reinician periódicamente.**
+
+<div align="center">
+
+### 🔗 [ferreteria-pos-demo.vercel.app](https://ferreteria-pos-demo.vercel.app/)
+
+| | |
+|---|---|
+| 📧 **Email** | `demo@ferreteria.com` |
+| 🔑 **Contraseña** | `Demo1234#` |
+
+</div>
+
+## 📸 Capturas
+
+<div align="center">
+
+<img src="https://github.com/user-attachments/assets/707c448b-250d-44a4-a5a7-2a5c5d9eec8f" width="49%" alt="Login" />
+<img src="https://github.com/user-attachments/assets/2b939548-fa85-4f11-84b2-9b3ff8657940" width="49%" alt="Dashboard" />
+
+<img src="https://github.com/user-attachments/assets/fb4e235e-f41d-4b4c-b6b8-194ae6713dc2" width="49%" alt="POS" />
+<img src="https://github.com/user-attachments/assets/08095cc7-4534-4199-bb8b-b331466f8a26" width="49%" alt="Productos" />
+
+<img src="https://github.com/user-attachments/assets/77d15fc1-fec2-4e17-b905-9fc2195a7d4a" width="49%" alt="Inventario" />
+<img src="https://github.com/user-attachments/assets/4834f6b3-7088-45c7-afe9-4c226ff80b00" width="49%" alt="Reportes" />
+
+</div>
+
+> Los datos de la demo se reinician periódicamente.
+
 > Sistema de punto de venta y gestión empresarial para ferreterías con múltiples sucursales.
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-black?style=flat-square&logo=next.js)
