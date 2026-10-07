@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEstaMontado } from "@/lib/hooks/useEstaMontado";
+import { usePerfil } from "@/lib/context/PerfilContext";
 import {
   Home,
   ShoppingCart,
@@ -19,38 +20,39 @@ import {
 } from "lucide-react";
 
 type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
+  href:   string;
+  label:  string;
+  icon:   React.ReactNode;
+  roles:  string[]; // roles que pueden ver este item
 };
 
 type NavGroup = {
   titulo: string;
-  items: NavItem[];
+  items:  NavItem[];
 };
 
 const NAV_GROUPS: NavGroup[] = [
   {
     titulo: "Operación",
     items: [
-      { href: "/dashboard", label: "Inicio", icon: <Home size={16} /> },
-      { href: "/pos", label: "POS", icon: <ShoppingCart size={16} /> },
-      { href: "/productos", label: "Productos", icon: <Package size={16} /> },
-      { href: "/inventario", label: "Inventario", icon: <Boxes size={16} /> },
+      { href: "/dashboard",  label: "Inicio",      icon: <Home size={16} />,        roles: ["admin", "almacen"] },
+      { href: "/pos",        label: "POS",         icon: <ShoppingCart size={16} />, roles: ["admin", "cajero"] },
+      { href: "/productos",  label: "Productos",   icon: <Package size={16} />,      roles: ["admin", "cajero", "almacen"] },
+      { href: "/inventario", label: "Inventario",  icon: <Boxes size={16} />,        roles: ["admin", "almacen"] },
     ],
   },
   {
     titulo: "Negocio",
     items: [
-      { href: "/clientes", label: "Clientes", icon: <Users size={16} /> },
-      { href: "/proveedores", label: "Proveedores", icon: <Truck size={16} /> },
-      { href: "/reportes", label: "Reportes", icon: <BarChart3 size={16} /> },
+      { href: "/clientes",    label: "Clientes",    icon: <Users size={16} />,     roles: ["admin"] },
+      { href: "/proveedores", label: "Proveedores", icon: <Truck size={16} />,     roles: ["admin", "almacen"] },
+      { href: "/reportes",    label: "Reportes",    icon: <BarChart3 size={16} />, roles: ["admin"] },
     ],
   },
   {
     titulo: "Administración",
     items: [
-      { href: "/usuarios", label: "Usuarios", icon: <UserCog size={16} /> },
+      { href: "/usuarios", label: "Usuarios", icon: <UserCog size={16} />, roles: ["admin"] },
     ],
   },
 ];
@@ -62,6 +64,7 @@ type Props = {
 export function Sidebar({ sucursalNombre }: Props) {
   const pathname = usePathname();
   const montado = useEstaMontado();
+  const { rol } = usePerfil();
   const [colapsado, setColapsado] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("sidebar-colapsado") === "true";
@@ -72,6 +75,12 @@ export function Sidebar({ sucursalNombre }: Props) {
     setColapsado(nuevo);
     localStorage.setItem("sidebar-colapsado", String(nuevo));
   }
+
+  // Filtrar grupos y items según el rol del usuario
+  const gruposVisibles = NAV_GROUPS.map((grupo) => ({
+    ...grupo,
+    items: grupo.items.filter((item) => item.roles.includes(rol)),
+  })).filter((grupo) => grupo.items.length > 0);
 
   return (
     <aside
@@ -120,7 +129,7 @@ export function Sidebar({ sucursalNombre }: Props) {
       </div>
 
       <nav className="flex-1 px-2.5 py-3 space-y-4 overflow-y-auto">
-        {NAV_GROUPS.map((grupo) => (
+        {gruposVisibles.map((grupo) => (
           <div key={grupo.titulo}>
             {!colapsado && (
               <p
